@@ -31,27 +31,45 @@
 #jf-setup small { display: block; margin-top: 12px; font-size: 22px; opacity: 0.55; }
 
 /* The Jellyfin Keep watching row (moonfin.js, drawn by app.js when a card has "jf"), after Moonfin's own
-   home: a poster per title with its name underneath, and the focused one opens out into its backdrop.
-   It is kept short and low so the clock and the wallpaper stay in view. Sizes are repeated in app.js
-   scrollShelf (7.25rem poster, 19rem focused, 1.375rem apart): change them together. */
-.theme-night .shelf.jrow { top: 38.5rem; }
+   home: a title under each card, kept short and low so the clock and the wallpaper stay in view.
+   app.js sets --jh (card height), --jn (card width) and --jf (focused width, "open" only) on the
+   section from the layout and size picked on the TV (moonfin.js look()), and one of the classes
+   .jl-open (posters, the focused one opens into its backdrop), .jl-posters, .jl-wide.
+   .jpeek (the look panel is open) shows the first card as focused. */
+.theme-night .shelf.jrow { top: calc(48.75rem - var(--jh)); }
 .theme-night .shelf.jrow .shelf-head { height: 2rem; margin-bottom: 0.5rem; }
 .theme-night .shelf.jrow .shelf-head h2 { font-size: 1.375rem; line-height: 2rem; }
-.jcard { width: 7.25rem; transition: width 260ms var(--ease), transform 260ms var(--ease); }
-.jcard.focus { width: 19rem; }
+.jcard { width: var(--jn); transition: width 260ms var(--ease), transform 260ms var(--ease); }
+.jl-open .jcard.focus, .jl-open.jpeek .jcard:first-child { width: var(--jf); }
 .jface {
-  position: relative; box-sizing: border-box; width: 100%; height: 10.75rem; overflow: hidden;
+  position: relative; box-sizing: border-box; width: 100%; height: var(--jh); overflow: hidden;
   border-radius: 0.875rem; background: rgba(255, 255, 255, 0.1);
   box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.35); transition: box-shadow 260ms var(--ease);
 }
 .jface img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-.jcard .jb, .jcard.focus .jp { display: none; }
-.jcard.focus .jb { display: block; }
-.jcard.focus .jface { box-shadow: 0 0 0 0.1875rem #fff, 0 1rem 2rem rgba(0, 0, 0, 0.5); }
+.jcard.focus .jface, .jpeek .jcard:first-child .jface { box-shadow: 0 0 0 0.1875rem #fff, 0 1rem 2rem rgba(0, 0, 0, 0.5); }
+/* which picture: the poster, or the backdrop */
+.jl-open .jb, .jl-posters .jb, .jl-wide .jp { display: none; }
+.jl-open .jcard.focus .jb, .jl-open.jpeek .jcard:first-child .jb { display: block; }
+.jl-open .jcard.focus .jp, .jl-open.jpeek .jcard:first-child .jp { display: none; }
+.jl-posters .jcard.focus, .jl-posters.jpeek .jcard:first-child { transform: scale(1.08); }
+.jl-wide .jcard.focus, .jl-wide.jpeek .jcard:first-child { transform: scale(1.05); }
 .jbar { position: absolute; left: 0.625rem; right: 0.625rem; bottom: 0.5rem; height: 0.25rem; border-radius: 0.125rem; background: rgba(255, 255, 255, 0.35); overflow: hidden; }
 .jface .jbar i { position: static; display: block; width: 0; height: 100%; background: #fff; }
+/* the name: two small lines under a poster; one line and the episode under the focused or a wide card */
 .jcap { height: 2.75rem; margin-top: 0.5rem; overflow: hidden; text-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.65); }
 .jcap b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 0.9375rem; line-height: 1.125rem; font-weight: 600; color: rgba(255, 255, 255, 0.8); overflow: hidden; word-break: break-word; }
 .jcap i { display: block; font-style: normal; font-size: 1rem; line-height: 1.25rem; color: rgba(255, 255, 255, 0.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; visibility: hidden; }
-.jcard.focus .jcap b { -webkit-line-clamp: 1; font-size: 1.1875rem; line-height: 1.375rem; color: #fff; }
-.jcard.focus .jcap i { visibility: visible; }
+.jcard.focus .jcap b, .jpeek .jcard:first-child .jcap b, .jl-wide .jcap b { -webkit-line-clamp: 1; font-size: 1.1875rem; line-height: 1.375rem; }
+.jcard.focus .jcap b, .jpeek .jcard:first-child .jcap b { color: #fff; }
+.jl-open .jcard.focus .jcap i, .jl-open.jpeek .jcard:first-child .jcap i, .jl-wide .jcap i { visibility: visible; }
+
+/* The row layout and size panel (moonfin.js openLook): small and in the corner, the home stays in view. */
+#jf-look { position: fixed; top: 9.5rem; left: 5rem; z-index: 99998; color: #fff; font-family: inherit; }
+#jf-look .jf-panel { width: 32rem; padding: 1.5rem 1.75rem; border-radius: 1.25rem; background: rgba(10, 8, 12, 0.92); }
+#jf-look h2 { margin: 0 0 1rem; font-size: 1.75rem; font-weight: 600; }
+#jf-look .jf-sel { margin-bottom: 0.5rem; padding: 0.625rem 1rem; border-radius: 0.75rem; }
+#jf-look .jf-sel span { display: block; font-size: 1rem; line-height: 1.25rem; opacity: 0.7; }
+#jf-look .jf-sel b { display: block; font-size: 1.375rem; line-height: 1.875rem; font-weight: 600; }
+#jf-look .jf-sel.on { background: #fff; color: #111; }
+#jf-look small { display: block; margin-top: 0.75rem; font-size: 1rem; opacity: 0.6; }

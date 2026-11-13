@@ -241,6 +241,7 @@
     ps5: '<svg viewBox="0 0 24 24"><path d="M7 6v12M17 6v12M7 10h10M7 14h10"/><circle cx="12" cy="12" r="8.5"/></svg>',
     xbox: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M7.5 7.5c2.5 2.5 6.5 2.5 9 0M7.5 16.5c2.5-2.5 6.5-2.5 9 0M7 8c2 3.5 2 4.5 0 8M17 8c-2 3.5-2 4.5 0 8"/></svg>',
     switch: '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="6" height="16" rx="3"/><rect x="13" y="4" width="6" height="16" rx="3"/><circle cx="8" cy="8" r="1" class="fill"/><circle cx="16" cy="14" r="1" class="fill"/></svg>',
+    jellyfin: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>',
     tv: '<svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/></svg>',
     hdmi: '<svg viewBox="0 0 24 24"><path d="M4 8h16v5l-3 4H7l-3-4z"/><path d="M8 8v3M11 8v3M13 8v3M16 8v3"/></svg>',
     screensaver: '<svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="14" rx="2.5"/><path d="M15.2 7.3a3.4 3.4 0 1 0 2.1 5 3.9 3.9 0 0 1-2.1-5z"/></svg>',
@@ -2067,8 +2068,16 @@
     data.shows = KW_ON ? (data.showsBy[who] || []).slice(0, KEEP_MAX) : [];
     var anyone = KW_ON && PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
     // a Jellyfin row (the Samsung app's moonfin.js): posters in a tighter row, see .jcard in tizen.css
-    var jrow = NIGHT && data.shows.length > 0 && !!data.shows[0].jf;
-    $("shelf-section").classList.toggle("jrow", jrow);
+    var jl = window.MoonfinTV && window.MoonfinTV.look ? window.MoonfinTV.look() : null;   // layout and size, chosen on the TV
+    var jrow = NIGHT && data.shows.length > 0 && !!data.shows[0].jf && !(jl && jl.layout === "glass");
+    var jsec = $("shelf-section");
+    jsec.classList.toggle("jrow", jrow);
+    ["open", "posters", "wide"].forEach(function (name) { jsec.classList.toggle("jl-" + name, jrow && !!jl && jl.layout === name); });
+    if (jrow && jl) {
+      jsec.style.setProperty("--jh", jl.h + "rem");
+      jsec.style.setProperty("--jn", jl.n + "rem");
+      jsec.style.setProperty("--jf", jl.f + "rem");
+    }
     // nobody has anything on the go: no empty box, the photo has the space (unless Now playing
     // is up at night). The people switcher stays: with nothing yet (Netflix tells Android nothing on
     // some TVs, issue #23) it is the only way to say who is watching before anything is played.
@@ -2626,12 +2635,12 @@
     var el = shelfEls[s];
     if (!el) { track.style.transform = ""; return; }
     if ($("shelf-section").classList.contains("jrow")) {
-      // the Jellyfin row: the focused card sits at the left edge and the posters run on to its right.
-      // Sizes are .jcard's in tizen.css (7.25rem poster, 19rem focused, 1.375rem apart); the width
-      // is worked out from them because the cards are still opening out when this runs.
-      var rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      // the Jellyfin row: the focused card sits at the left edge and the others run on to its right.
+      // Card widths come from MoonfinTV.look() (the same numbers tizen.css gets as --jn and --jf, 1.375rem
+      // apart); the row is worked out from them because the cards are still opening out when this runs.
+      var rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16, jl = window.MoonfinTV.look();
       var n = shelfEls.length, room = track.parentNode.clientWidth - 3 * rem;
-      var shift = Math.min(s * 8.625 * rem, Math.max(0, (n * 7.25 + (n - 1) * 1.375 + 11.75) * rem - room));
+      var shift = Math.min(s * (jl.n + 1.375) * rem, Math.max(0, (n * jl.n + (n - 1) * 1.375 + (jl.f - jl.n)) * rem - room));
       track.style.transform = "translateX(" + (document.documentElement.dir === "rtl" ? shift : -shift) + "px)";
       return;
     }
@@ -3191,7 +3200,20 @@
     if (id === "apps") return appsRows();
     if (id === "people") return peopleRows();
     if (id === "quick") return quickRows();
+    if (id === "jellyfin") return jellyfinRows();
     return aboutRows();
+  }
+
+  // ---- Jellyfin (the Samsung app's moonfin.js): Continue watching from your own server, opened in Moonfin ----
+  function jellyfinRows() {
+    var M = window.MoonfinTV, jl = M.look();
+    return [
+      info("jf-note", t("jf_note")),
+      { kind: "nav", key: "jf-conn", label: t("jf_conn"), sub: M.server() || t("jf_not_set"), act: function () { M.setup(renderSettings); } },
+      // the look panel needs the real home in view, so Home settings closes while it is open
+      { kind: "nav", key: "jf-look", label: t("jf_row_look"), sub: t("jf_lay_" + jl.layout) + "  ·  " + t("jf_size_" + jl.size),
+        act: function () { closeSettings(); M.openLook(); } }
+    ];
   }
 
   function languageRows() {
@@ -4683,6 +4705,8 @@
     initSettings();
     // Home settings gets an Updates section, before About, where the launcher can update itself
     if (updRead() && UPD.supported) SECS.splice(SECS.length - 1, 0, ["updates", "download"]);
+    // and a Jellyfin section on the Samsung app (moonfin.js), also before About
+    if (window.MoonfinTV) SECS.splice(SECS.length - 1, 0, ["jellyfin", "jellyfin"]);
     mark("app-start");
     clock();
     setInterval(clock, 15000);

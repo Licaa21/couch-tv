@@ -137,8 +137,62 @@
     } catch (e) { toast(t("jf_no_moonfin")); return false; }
   }
 
+  // ---------- how the row looks: a layout and a size, kept on this TV ----------
+  // "open": posters, the focused one opens into its backdrop (Moonfin's home). "posters": posters only.
+  // "wide": landscape cards. "glass": the original glass cards (app.js draws those itself).
+  // Sizes are the card height in rem. n and f are the card's width unfocused and focused, in rem;
+  // app.js hands them to tizen.css as --jh, --jn and --jf and uses them to slide the row.
+  var LOOK = "couch.jf.look", LAYOUTS = ["open", "posters", "wide", "glass"], SIZES = [8, 10.75, 13.5, 16];
+  function look() {
+    var v = read(LOOK) || {};
+    var layout = LAYOUTS.indexOf(v.layout) >= 0 ? v.layout : "open";
+    var size = v.size >= 0 && v.size < SIZES.length ? v.size | 0 : 1;
+    var h = SIZES[size], n = (layout === "wide" ? 1.775 : 0.675) * h;
+    return { layout: layout, size: size, h: h, n: n, f: layout === "open" ? 1.775 * h : n };
+  }
+  function redraw() { if (window.tv && window.tv.refresh) window.tv.refresh(); }
+
+  // A small panel in the corner; the real home, with the real row, stays in view and changes as you pick.
+  function openLook(onClose) {
+    if (document.getElementById("jf-look")) return;
+    var box = document.createElement("div"), sec = document.getElementById("shelf-section"), at = 0;
+    box.id = "jf-look";
+    if (sec) sec.classList.add("jpeek");   // the first card shows as focused, so the open layout is seen too
+    function paint() {
+      var l = look();
+      box.innerHTML = '<div class="jf-panel"><h2>' + esc(t("jf_look_title")) + '</h2>' +
+        [["jf_layout", "jf_lay_" + l.layout], ["jf_size", "jf_size_" + l.size]].map(function (r, i) {
+          return '<div class="jf-sel' + (i === at ? " on" : "") + '"><span>' + esc(t(r[0])) + '</span><b>‹ ' + esc(t(r[1])) + ' ›</b></div>';
+        }).join("") + '<small>' + esc(t("jf_look_hint")) + '</small></div>';
+    }
+    function change(d) {
+      var v = read(LOOK) || {}, l = look();
+      if (at === 0) v.layout = LAYOUTS[(LAYOUTS.indexOf(l.layout) + d + LAYOUTS.length) % LAYOUTS.length];
+      else v.size = Math.max(0, Math.min(SIZES.length - 1, l.size + d));
+      write(LOOK, v);
+      paint();
+      redraw();
+    }
+    function close() {
+      document.removeEventListener("keydown", keys, true);
+      if (box.parentNode) box.parentNode.removeChild(box);
+      if (sec) sec.classList.remove("jpeek");
+      if (onClose) onClose();
+    }
+    function keys(e) {
+      var k = e.keyCode;
+      if (k === 10009 || k === 27 || k === 13) { e.preventDefault(); close(); }
+      else if (k === 38 || k === 40) { e.preventDefault(); at = at === 0 ? 1 : 0; paint(); }
+      else if (k === 37 || k === 39) { e.preventDefault(); change(k === 39 ? 1 : -1); }
+      e.stopImmediatePropagation();
+    }
+    document.body.appendChild(box);
+    paint();
+    document.addEventListener("keydown", keys, true);
+  }
+
   // ---------- the setup screen (the Jellyfin tile): server, API key, user name ----------
-  function setup() {
+  function setup(onClose) {
     if (document.getElementById("jf-setup")) return;
     var cfg = read(CFG) || {};
     var box = document.createElement("div");
@@ -157,7 +211,11 @@
     document.body.appendChild(box);
     var els = ["jf-server", "jf-key", "jf-user", "jf-save", "jf-forget"].map(function (i) { return document.getElementById(i); });
     function say(s) { document.getElementById("jf-msg").textContent = s; }
-    function close() { document.removeEventListener("keydown", keys, true); if (box.parentNode) box.parentNode.removeChild(box); }
+    function close() {
+      document.removeEventListener("keydown", keys, true);
+      if (box.parentNode) box.parentNode.removeChild(box);
+      if (onClose) onClose();
+    }
     function save() {
       var c = { server: normalize(els[0].value), key: els[1].value.trim(), user: els[2].value.trim() };
       if (!c.server || !c.key) { say(t("jf_need")); return; }
@@ -188,5 +246,8 @@
     els[0].focus();
   }
 
-  window.MoonfinTV = { watchNext: watchNext, open: open, setup: setup, refresh: function (force) { refresh(force); } };
+  // Home settings (app.js) has a Jellyfin section: it opens these two screens and shows the server.
+  window.MoonfinTV = { watchNext: watchNext, open: open, setup: setup, openLook: openLook, look: look,
+    server: function () { var c = read(CFG); return c && c.server ? c.server : ""; },
+    refresh: function (force) { refresh(force); } };
 })();

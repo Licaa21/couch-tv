@@ -72,10 +72,9 @@
       }
     });
     if (SKY_PORT) shown.unshift({ package: SKY, label: "Sky" });
-    shown.unshift({ package: JF, label: "Jellyfin" });
     shown.unshift({ package: LIVE, label: "TV" });
   }
-  var SKY = "local.sky", LIVE = "local.tv", JF = "local.jellyfin", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
+  var SKY = "local.sky", LIVE = "local.tv", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
   function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
   sortOut();
   send("log", "apps on this TV: " + tizenApps.length + ", shown: " + shown.map(function (a) { return a.label; }).join(", "));
@@ -207,7 +206,6 @@
   function launch(pkg) {
     if (pkg === SKY) return openSky();
     if (pkg === LIVE) return openInput("tv");
-    if (pkg === JF) { window.MoonfinTV.setup(); return true; }
     var a = byPkg[pkg], m = MAP[pkg];
     var ids = a ? [a.id] : [];
     if (m) (m.ids || []).concat(m.app ? [m.app] : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
@@ -236,7 +234,6 @@
   function iconUrl(pkg) {
     if (pkg === SKY) return "logo-sky.png";
     if (pkg === LIVE) return tileIcon('<rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/>', "#0a84ff");
-    if (pkg === JF) return tileIcon('<circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/>', "#7b5ea7");
     var m = MAP[pkg];
     if (m && m.logo) return "logos/" + pkg + ".png";
     var a = byPkg[pkg];
