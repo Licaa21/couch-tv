@@ -799,18 +799,20 @@
         var frost = GLASS_AMT <= 2 && s.glass && !s.src;
         f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + s.photo + (frost ? "-glass" : "") + ".jpg)";
         f.style.backgroundSize = LENS * 100 + "vw " + LENS * 100 + "vh";
-        f.style.backgroundPosition = (-ex - (LENS - 1) * cx) + "px " + (-ey - (LENS - 1) * cy) + "px";
+        f.style.backgroundPosition = (-ex - (LENS - 1) * cx) + "px calc(" + (-ey - (LENS - 1) * cy) + "px + var(--cdy, 0px) * " + LENS + ")";
       } else {
         f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + s.photo + (s.glass ? "-glass" : "") + ".jpg)";
-        f.style.backgroundPosition = -ex + "px " + -ey + "px";
+        // --cdy: how far the Samsung app has lifted this clock (a transform): the photo in the digits stays the one behind them
+        f.style.backgroundPosition = -ex + "px calc(" + -ey + "px + var(--cdy, 0px))";
       }
     }
     if (s.water) {   // above the waterline sharp, below it the blurred reflection
       // The digits hang below the clock's box (its line height is tight), so the clips reach past
       // the box on the open sides; a plain inset cut the bottom of the numbers off .
       var line = innerHeight * s.water - cs[0].offsetTop, out = "-50%";
-      cs[0].style.clipPath = "inset(" + out + " " + out + " " + (cs[0].offsetHeight - line) + "px " + out + ")";
-      cs[1].style.clipPath = "inset(" + line + "px " + out + " " + out + " " + out + ")";
+      // (a lifted clock meets the water further down its digits, by --cdy)
+      cs[0].style.clipPath = "inset(" + out + " " + out + " calc(" + (cs[0].offsetHeight - line) + "px - var(--cdy, 0px)) " + out + ")";
+      cs[1].style.clipPath = "inset(calc(" + line + "px + var(--cdy, 0px)) " + out + " " + out + " " + out + ")";
     }
   }
 
