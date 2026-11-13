@@ -143,7 +143,7 @@
     }
     function keys(e) {
       if (window.tv && window.tv.wake) window.tv.wake();
-      if (e.keyCode === 10009 || e.keyCode === 27 || e.keyCode === 13) { e.preventDefault(); close(); }
+      if ((e.keyCode === 10009 || e.keyCode === 27 || e.keyCode === 13) && !e.repeat) { e.preventDefault(); close(); }
       e.stopImmediatePropagation();
     }
     document.addEventListener("keydown", keys, true);

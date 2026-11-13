@@ -54,7 +54,7 @@
   function act(k) {
     var ids = { tv: "tv", h1: "HDMI:1", h2: "HDMI:2", h3: "HDMI:3", h4: "HDMI:4" };
     if (ids[k]) { close(function () { window.TVOS.openInput(ids[k]); }); return; }
-    if (k === "wx") close(function () { if (window.WeatherTV) window.WeatherTV.open(); });
+    if (k === "wx") { if (window.WeatherTV) window.WeatherTV.open(); }   // over this page: the home is not brought back in between
     else if (k === "apps") openApps();
     else if (k === "hs") close(function () { if (window.tv && window.tv.homeSettings) window.tv.homeSettings(); });
     else if (k === "tvs") close(function () { window.TVOS.launch("com.android.tv.settings"); });
@@ -108,7 +108,7 @@
     box.style.scrollBehavior = instant ? "auto" : "";
     box.scrollTop = Math.max(0, want);
   }
-  function closeApps() { if (popup && popup.parentNode) popup.parentNode.removeChild(popup); popup = null; root.classList.remove("cp-apps-open"); if (window.tv && window.tv.fitClocks && isOpen) window.tv.fitClocks(); }
+  function closeApps() { if (!popup) return; if (popup && popup.parentNode) popup.parentNode.removeChild(popup); popup = null; root.classList.remove("cp-apps-open"); if (window.tv && window.tv.fitClocks && isOpen) window.tv.fitClocks(); }
   function wake() { if (window.tv && window.tv.wake) window.tv.wake(); }   // the home's "hide after x seconds" must not take these keys as nobody being here
   function popKeys(e) {
     wake();
@@ -126,6 +126,7 @@
 
   // Runs before the home's own keys: the home must not move behind this page.
   function keys(e) {
+    if (document.getElementById("wx-panel")) return;   // the weather screen is over this page and has the keys
     wake();
     if (popup) { popKeys(e); return; }
     var k = e.keyCode;
@@ -134,7 +135,7 @@
     else if (k === 40) { if (ri === 0) { ri = 1; ci = Math.min(ci, rows[1].length - 1); paint(); } }
     else if (k === 37) { ci = Math.max(0, ci - 1); paint(); }
     else if (k === 39) { ci = Math.min(rows[ri].length - 1, ci + 1); paint(); }
-    else if (k === 13) { var c = rows[ri][ci]; if (c) act(c.getAttribute("data-k")); }
+    else if (k === 13) { var c = rows[ri][ci]; if (c && !e.repeat) act(c.getAttribute("data-k")); }   // a held OK opens once
     e.preventDefault();
     e.stopImmediatePropagation();
   }
@@ -146,12 +147,12 @@
     if (!el) build();
     ri = 0; ci = 1;
     paint();
-    loadWeather();
+    setTimeout(function () { if (isOpen) loadWeather(); }, 220);   // after the page is up, not in the key press
     el.style.display = "block";
     void el.offsetHeight;   // laid out below the screen first, so it rises
     root.classList.add("cp-open");
     document.addEventListener("keydown", keys, true);
-    setTimeout(function () { busy = false; if (isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }, 450);   // the clock clears the widgets
+    setTimeout(function () { busy = false; if (isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }, 200);   // the clock clears the widgets
   }
   function close(cb) {
     if (!isOpen) { if (cb) cb(); return; }
@@ -164,7 +165,7 @@
       if (!isOpen && el) el.style.display = "none";
       if (!isOpen) { wake(); if (window.tv && window.tv.fitClocks) window.tv.fitClocks(); }   // back above the row, once the home is in place
       if (cb) cb();
-    }, 450);
+    }, 200);
   }
 
   // the arrow under the dock: the page is below

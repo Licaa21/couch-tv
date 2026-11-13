@@ -138,8 +138,9 @@ html.lighter .jcard.jnew { animation-duration: 260ms; }
 /* the weather screen is see-through: the clock and the photo stay behind it, dimmed, and the home steps aside as it does for the widgets page */
 #wx-panel.wx-day, #wx-panel.wx-night { background: rgba(10, 8, 12, 0.55); }
 html.wx-open .date, html.wx-open .top-left, html.wx-open .quick, html.wx-open .quick-note, html.wx-open .np, html.wx-open .shelf, html.wx-open .apps, html.wx-open #cp-hint {
-  visibility: hidden; pointer-events: none;
+  opacity: 0; pointer-events: none;
 }
+html.wx-open .date { transition: none; }
 #wx-panel svg { display: block; width: 100%; height: 100%; }
 #wx-panel .wx-msg { position: absolute; top: 45%; left: 0; right: 0; text-align: center; font-size: 2rem; opacity: 0.8; }
 #wx-panel .wx-grid { display: grid; grid-template-columns: 1fr 32rem; grid-template-rows: auto auto; align-content: end; gap: 1.5rem 4rem; height: 100%; box-sizing: border-box; padding: 0 5rem 3rem; }
@@ -175,7 +176,7 @@ html.wx-open .date, html.wx-open .top-left, html.wx-open .quick, html.wx-open .q
 /* ---- the widgets page below the dock (panel.js) and the Apps menu: opening a menu fades the top buttons, the row and the
    dock out, exactly like "hide rows when idle", and dims what is left (the photo, the date and the clock), as Home settings does ---- */
 html.cp-open .top-left, html.cp-open .quick, html.cp-open .quick-note, html.cp-open .np, html.cp-open .shelf, html.cp-open .apps, html.cp-open #cp-hint {
-  visibility: hidden; pointer-events: none; transition: visibility 0s linear 160ms;   /* only gone once the overlay has covered them */
+  opacity: 0; pointer-events: none;
 }
 #cp {
   display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0; transition: opacity 160ms ease;
@@ -275,5 +276,14 @@ html.cp-open #cp-hint { opacity: 0; animation: none; }
 .settings.on .set-side, .settings.on .set-main, .gear-pop.on, .app-pop.on, .sleep-menu.on { animation: none !important; }
 .settings { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(10, 8, 12, 0.94); }
 
-/* While a menu is up nothing of the row shows, not even the episode name of the focused card (it carries its own visibility). */
-html.cp-open .jcap i, html.wx-open .jcap i, html.cp-open .jcap b, html.wx-open .jcap b { visibility: hidden !important; }
+/* Hiding the home for a menu (or for "hide after x seconds") is a change of opacity on layers the TV keeps, never visibility:
+   with visibility the row's pictures were thrown away and drawn again each time, which is the lag at every menu. */
+.theme-night .shelf, .theme-night .apps { will-change: opacity; }
+html.idle-photo .shelf, html.idle-photo .apps { visibility: visible; transition: opacity 250ms ease; }
+
+/* The row started 46px right of its heading on this TV's browser (no flex gap): the stand-in margin replaced the strip's own. */
+.no-flex-gap.theme-night .shelf-row > .np-slot + .shelf-clip { margin-left: -1.5rem; }
+.no-flex-gap.theme-night .shelf-row > .np-slot.on + .shelf-clip { margin-left: -0.125rem; }
+
+/* the weather screen opened from the widgets page lies over it: the page is not drawn meanwhile */
+html.wx-open #cp { opacity: 0; }

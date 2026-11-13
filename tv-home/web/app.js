@@ -2223,7 +2223,9 @@
   // The Samsung app's Jellyfin row changed (moonfin.js): redraw just the row, the focus staying where it was.
   function reloadShelf() {
     if (!(TV && TV.watchNext && OFFLINE && KW_ON)) { refresh(); return; }
-    // never reshuffle the row under a lift or an open menu: try again in a few seconds
+    // never reshuffle the row under a lift or an open menu (the widgets page and the weather screen too): try again in a few seconds
+    var dcl = document.documentElement.classList;
+    if (dcl.contains("cp-open") || dcl.contains("wx-open")) { setTimeout(reloadShelf, 4000); return; }
     if (lift || ["pmenu", "settings", "gear", "smart", "updask", "shelfmenu", "appmenu", "menu", "inputs"].indexOf(zone) >= 0) { setTimeout(reloadShelf, 4000); return; }
     shareWatchNext();
     renderShelf();
@@ -2260,11 +2262,9 @@
     // so the move from one place to the next is a transition and not a jump.
     var lift0 = 0;
     try { var tf = getComputedStyle(c).transform; lift0 = tf && tf !== "none" ? new WebKitCSSMatrix(tf).m42 : 0; } catch (e) {}
-    var m = document.createElement("i");
-    m.style.cssText = "display:inline-block;width:0;height:0";
-    f.appendChild(m);
+    var m = f.querySelector("i.bm");   // a zero size marker on the baseline, kept (adding and removing one each time drew the digits again)
+    if (!m) { m = document.createElement("i"); m.className = "bm"; m.style.cssText = "display:inline-block;width:0;height:0"; f.appendChild(m); }
     var base = m.getBoundingClientRect().bottom - lift0;
-    f.removeChild(m);
     var fs = parseFloat(getComputedStyle(c).fontSize) || 0, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") ? 100000 : sec.getBoundingClientRect().top;
     var modal = modalBlocks();
@@ -2284,14 +2284,15 @@
       var room = base - DIGIT_EM * fs - 9 * rem;   // how far they can rise before the date line
       dy = Math.min(need, Math.max(0, room));   // never smaller: what still overlaps stays behind the cards, as the clock always is
     }
-    el.style.setProperty("--cdy", Math.round(dy) + "px");
-    if (el.classList.contains("on")) document.documentElement.style.setProperty("--cdy-r", Math.round(dy) + "px");   // the date line rises with it
+    var px = Math.round(dy) + "px", de = document.documentElement;   // written only when changed: a custom property on <html> restyles the whole page
+    if (el.style.getPropertyValue("--cdy") !== px) el.style.setProperty("--cdy", px);
+    if (el.classList.contains("on") && de.style.getPropertyValue("--cdy-r") !== px) de.style.setProperty("--cdy-r", px);   // the date line rises with it
   }
   // all the scenes again: the glass in the digits is cut from where the clock now is
   function fitClocks() {
     if (!window.MoonfinTV || !NIGHT || !sceneEls.length) return;
-    glassShown = "";
-    clock();
+    // only the lift is worked out again (a transform); the digits are not drawn again, which a slow TV feels at every menu
+    sceneEls.forEach(function (el) { if (el.classList.contains("on") || el.classList.contains("ready")) fitScene(el); });
   }
 
   // ---------------- apps ----------------
@@ -3361,6 +3362,7 @@
     renderPeople();
     render();
     renderQuick();
+    glassShown = "";   // the digits are drawn again where they now are
     clock();
     refreshWeather();
     fitClocks();
