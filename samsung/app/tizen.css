@@ -249,3 +249,7 @@ html.lighter main.home, html.lighter #cp, html.lighter #cp .cp-grid { transition
 
 /* the date line sits just above the clock, so it rises with it (app.js fitScene, showScene) */
 .theme-night .date { margin-top: calc(var(--cdy-r, 0px) * -1); transition: opacity 600ms ease-in-out, margin-top 300ms ease; }
+/* A 2018 TV (Tizen 4.0) stops clipping a tile's picture to the face's rounded corners while the
+   tile scales or fades, so the logo shows square for about a second. Rounding the picture and the
+   glint themselves keeps the corners; a mask on the face would also cut its shadow. */
+.face img, .face::after { border-radius: inherit; }

@@ -6,6 +6,22 @@ The newest release is **0.12** (9 November 2026). The TV apps come from [the Rel
 
 ## November 2026
 
+### 13 November 2026: Czech on the TV home (on main, in the next release)
+
+The TV home now speaks Czech (Čeština), with a 24 hour clock and Czechia as the country for where shows stream. It is picked in Home settings, `home.language: "cs"`, or by itself on a TV set to Czech. 298 of the home's sentences are translated; the newest ones (such as Ambient and the LG Developer Mode lines) show in English for now. The phone remote is not in Czech yet. Thanks slezaCZ, who tested it on a Gogen Android TV 11 (#178).
+
+### 13 November 2026: Chromecast with Google TV keeps couch-tv after two quick Home presses (on main, in the next release)
+
+On a Chromecast with Google TV (Android 14), pressing Home twice quickly from an app could leave the Google home in front for good. The app that was closing (Jellyfin here) sent its window event after the Google home's, so the Home button watch read that as the home having gone, and later Home presses sent no new event. The watch now keeps when the TV's own home last came forward and when couch-tv last did, and its one re-check brings couch-tv back when the home came last and the only events since were another app closing within about 2 seconds. An app you really opened from the home still keeps the screen. Fire TV, Bell Fibe, Xiaomi and the Android 9 path are unchanged. Reported with the logcat trace by goldimpala ([#175](https://github.com/Seagey/couch-tv/issues/175)). Untested on a real Chromecast so far.
+
+### 13 November 2026: Hold OK on a Keep watching card (on main, in the next release)
+
+Holding OK on a card in Keep watching opens a small menu with **Remove from Keep watching**, the same way holding OK on a dock app opens its menu. It is on main and not in 0.12, so a TV running the 0.12 release app does nothing on that hold (a Chromecast and an NVIDIA Shield both showed this, [#175](https://github.com/Seagey/couch-tv/issues/175), thanks goldimpala). Build the app from main ([Building the app](SETUP.md#building-the-app-instead-of-downloading-it)) to have it now. A click beside the open menu now closes it, as it does for the dock menu.
+
+### 13 November 2026: Android TV 9 brings couch-tv back without the 5 second wait (on main, in the next release)
+
+On a Xiaomi MiTV-AXSO2 (Android TV 9, Google's older Android TV home), a Home press left the Google home up for 5 seconds, and a second press in that time kept it there. It is the same Android 9 hold as on Fire OS 7 (#162), so the Home button watch now moves couch-tv's own task to the front on every TV with Android 9 or older, not only on Fire TV. Android 10 and newer are unchanged.
+
 ### 13 November 2026: Bell Streamer with Fibe TV as its home (Beta, on main, in the next release)
 
 On a Bell Streamer (Bell Canada's Android TV 12 box) the home is Bell's Fibe TV app, so the Home key opened Fibe and never reached couch-tv. The Home button watch now knows Fibe's home screen and puts couch-tv back on top, and `apply.sh` switches the watch on when Fibe is installed. Fibe is never switched off. Opening Fibe from couch-tv's own tile works and is left alone while it stays in front. Untested on a real box so far (thanks Sparkybabcia, [#168](https://github.com/Seagey/couch-tv/issues/168)). What to expect: Fibe may flash up for a moment before couch-tv comes back, and a Fibe button on the remote will bring couch-tv back instead of Fibe, because the watch cannot tell it from a Home press.
