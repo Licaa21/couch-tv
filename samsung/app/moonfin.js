@@ -277,10 +277,7 @@
     function go() { launchOnce(row, app); }
     try {
       tizen.application.getAppsContext(function (list) {
-        go();
-        // Moonfin already open, or in the background: the Smart TV fork 2.1.1 reads the title again when the request arrives or the
-        // page comes forward; an older Moonfin only comes forward, so it is asked once more when it is in front
-        if ((list || []).some(function (c) { return c.appId === app; })) setTimeout(go, 1800);
+        go();   // once, also when Moonfin is already open: the Smart TV fork 2.1.1 reads the title again when the request arrives or the page comes forward
       }, go);
     } catch (e) { go(); }
     return true;
