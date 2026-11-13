@@ -2238,6 +2238,22 @@
   // squeezed, by just as much as the row reaches into it (as far as the date line allows). The bottom of the
   // digits is found with a zero size marker sitting on the text's baseline.
   var fitRowTop = 100000;
+  // Where each built-in scene's cut-out starts, as a part of the screen's height, in 64 columns left to right (measured from the
+  // scene-<name>-fg pictures). Below that line the clock is behind the scenery.
+  var FG_TOP = {
+    night: [0.19, 0.153, 0.214, 0.214, 0.222, 0.229, 0.244, 0.256, 0.269, 0.288, 0.305, 0.315, 0.322, 0.337, 0.344, 0.355, 0.368, 0.369, 0.371, 0.392, 0.38, 0.402, 0.412, 0.423, 0.424, 0.432, 0.421, 0.399, 0.403, 0.383, 0.351, 0.329, 0.343, 0.358, 0.365, 0.396, 0.414, 0.423, 0.412, 0.406, 0.405, 0.414, 0.415, 0.406, 0.385, 0.377, 0.364, 0.338, 0.349, 0.329, 0.336, 0.318, 0.326, 0.315, 0.275, 0.275, 0.233, 0.272, 0.219, 0.208, 0.219, 0.192, 0.18, 0.156],
+    golden: [0.529, 0.532, 0.532, 0.537, 0.536, 0.534, 0.533, 0.526, 0.529, 0.543, 0.544, 0.542, 0.54, 0.537, 0.534, 0.528, 0.527, 0.523, 0.517, 0.512, 0.506, 0.5, 0.489, 0.479, 0.465, 0.453, 0.439, 0.422, 0.404, 0.385, 0.366, 0.343, 0.345, 0.368, 0.384, 0.403, 0.42, 0.435, 0.45, 0.464, 0.477, 0.488, 0.498, 0.506, 0.513, 0.519, 0.524, 0.527, 0.531, 0.53, 0.537, 0.539, 0.542, 0.543, 0.544, 0.546, 0.547, 0.548, 0.55, 0.544, 0.537, 0.531, 0.532, 0.528],
+    fog: [0.46, 0.468, 0.474, 0.479, 0.472, 0.475, 0.471, 0.465, 0.459, 0.459, 0.462, 0.465, 0.469, 0.469, 0.468, 0.469, 0.47, 0.471, 0.469, 0.467, 0.467, 0.468, 0.466, 0.466, 0.469, 0.473, 0.479, 0.481, 0.482, 0.485, 0.486, 0.488, 0.487, 0.484, 0.483, 0.482, 0.485, 0.494, 0.498, 0.483, 0.481, 0.481, 0.486, 0.488, 0.481, 0.479, 0.481, 0.485, 0.487, 0.488, 0.486, 0.481, 0.476, 0.472, 0.47, 0.47, 0.473, 0.471, 0.47, 0.468, 0.465, 0.466, 0.476, 0.473],
+    dawn: [0.467, 0.466, 0.469, 0.469, 0.472, 0.47, 0.476, 0.477, 0.475, 0.476, 0.476, 0.473, 0.472, 0.481, 0.482, 0.482, 0.48, 0.481, 0.481, 0.485, 0.486, 0.485, 0.481, 0.483, 0.485, 0.485, 0.483, 0.485, 0.493, 0.494, 0.485, 0.487, 0.492, 0.484, 0.484, 0.486, 0.484, 0.481, 0.478, 0.469, 0.458, 0.45, 0.446, 0.445, 0.444, 0.447, 0.446, 0.449, 0.456, 0.467, 0.478, 0.48, 0.479, 0.482, 0.481, 0.481, 0.48, 0.481, 0.482, 0.483, 0.477, 0.475, 0.474, 0.474]
+  };
+  // The lowest place on the screen (px) where the digits between these sides can show in this scene, or null when nothing is in front.
+  function fgCap(el, box) {
+    var sc = SCENES[sceneEls.indexOf(el)], prof = sc && sc.fg && !sc.mine ? FG_TOP[sc.id] : null;
+    if (!prof) return null;
+    var a = Math.max(0, Math.floor(box.left / innerWidth * 64)), b = Math.min(63, Math.floor(box.right / innerWidth * 64)), top = 0;
+    for (var i = a; i <= b; i++) if (prof[i] > top) top = prof[i];
+    return top * innerHeight;
+  }
   function textBox(el) { var g = document.createRange(); g.selectNodeContents(el); return g.getBoundingClientRect(); }
   // The boxes of what a menu has up (its words and cards), or null when none is.
   function modalBlocks() {
@@ -2279,6 +2295,9 @@
       modal.forEach(function (r) { if (r.width > 0 && r.right > cr.left - pad && r.left < cr.right + pad && r.top > digitsTop && r.top < rowTop) rowTop = r.top; });
     } else fitRowTop = rowTop;
     var target = rowTop - 0.6 * rem, need = base + 0.01 * fs - target;   // need: how far the digits reach into the row
+    // The scenery in front of the clock (the cut-out) hides its lower part: when nothing of the digits shows as low as the row or
+    // the menu, there is nothing to move out of the way.
+    if (need > 0) { var cap = fgCap(el, textBox(f)); if (cap != null && cap <= target) need = 0; }
     var dy = 0;
     if (need > 0) {
       var room = base - DIGIT_EM * fs - 9 * rem;   // how far they can rise before the date line
