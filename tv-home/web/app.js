@@ -2080,7 +2080,11 @@
   function jfRowNote() {
     var M = window.MoonfinTV;
     if (!M || !KW_ON) return "";
-    return M.server() ? M.problem() : t("jf_row_setup");
+    if (!M.server()) return t("jf_row_setup");
+    var why = M.problem();
+    if (why) return why;
+    var n = M.count();
+    return n ? t("jf_row_lost", { n: n }) : "";   // titles came from the server and none is drawn: say so
   }
   function renderShelf() {
     var track = $("shelf");
@@ -2918,7 +2922,7 @@
       else if (dx) qi = Math.max(0, Math.min(nq - 1, qi + dx));
       else if (dy > 0) {
         if (!NIGHT && npReach()) zone = "np";
-        else if (peopleOn()) toPeople();
+        else if (peopleOn() && !window.MoonfinTV) toPeople();   // the Samsung app goes straight down; the picture is one press left
         else if (cards.length) zone = "shelf";
         else { zone = "grid"; g = Math.min(GRID_COLS, gridEls.length) - 1; }
       }
@@ -4872,6 +4876,13 @@
     fitClocks: function () { fitClocks(); },
     // the weather place and unit Home settings has, for the Samsung app's weather panel (weather.js)
     clock24: function () { return CLOCK24; },
+    keepWatching: function (on) {
+      on = !!on;
+      if (KW_ON === on) return;
+      KW_ON = on; ST.keep_watching = on; saveSettings();
+      document.documentElement.classList.toggle("kw-off", !on);
+      reloadShelf();
+    },   // connecting Jellyfin turns the row on
     weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: WXCFG.place, timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },
     screenOff: function () { toggleScreenOff(true); },
     wakeScreen: function () { toggleScreenOff(false); },

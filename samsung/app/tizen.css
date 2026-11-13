@@ -260,3 +260,10 @@ html.lighter main.home, html.lighter #cp, html.lighter #cp .cp-grid { transition
 .tile.focus .face::after { display: none; }
 .app .label { transition: none; }
 .app.focus .label { transition: opacity 120ms ease; }
+
+/* Moving the focus between app tiles flashed on the TV: the picture's brightness filter switched on and off while the tile scaled, a
+   big blurred shadow was animated, and the tile was drawn again at its new size on landing. Now the brightness stays, the ring
+   and shadow change at once, and the tile keeps its own layer. */
+.theme-night .app:not(.focus) .face img { filter: none; }
+.app .face { transition: none; }
+.tile.app { will-change: transform; -webkit-backface-visibility: hidden; backface-visibility: hidden; }

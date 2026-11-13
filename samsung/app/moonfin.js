@@ -378,6 +378,7 @@
         busy = false;
         refresh(true, function (e2, n) {
           say(e2 ? t("jf_err_net") : t("jf_ok", { n: n || 0 }));
+          if (!e2 && window.tv && window.tv.keepWatching) window.tv.keepWatching(true);
           if (!e2) setTimeout(close, 1800);
         });
       });
@@ -429,6 +430,7 @@
   // Home settings (app.js) has a Jellyfin section: it opens these two screens and shows the server.
   window.MoonfinTV = { watchNext: watchNext, open: open, setup: setup, openLook: openLook, look: look,
     server: function () { var c = read(CFG); return c && c.server ? c.server : ""; },
+    count: function () { return stale() ? 0 : (read(ROWS) || []).length; },
     problem: function () { return problem ? t(problem === "key" ? "jf_err_key" : problem === "user" ? "jf_err_user" : problem === "http" ? "jf_err_http" : "jf_err_net") : ""; }, fb: fb, updated: function () { return lastUpdate; },
     refresh: function (force) { refresh(force); } };
 })();
