@@ -140,7 +140,7 @@
         '" autocomplete="off" autocapitalize="off" spellcheck="false"></label>';
     }
     box.innerHTML = '<div class="jf-panel"><h2>' + esc(t("jf_title")) + '</h2><p>' + esc(t("jf_note")) + '</p>' +
-      field("jf-server", t("jf_server"), cfg.server, "http://192.168.1.10:8096") +
+      field("jf-server", t("jf_server"), cfg.server, "http://your-server:8096") +
       field("jf-key", t("jf_key"), cfg.key, "") +
       field("jf-user", t("jf_user"), cfg.user, "") +
       '<div class="jf-row"><button id="jf-save" type="button">' + esc(t("jf_save")) + '</button>' +
