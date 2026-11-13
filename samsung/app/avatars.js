@@ -68,15 +68,15 @@
 
   window.AVATARS = {
     ids: LIST.map(function (a) { return a[0]; }),
-    // the picture as an <svg> (a square; the page rounds it), or "" for an id it does not know
-    html: function (id) {
-      var a = BY[id];
-      return a ? '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" fill="' + a[1] + '"/>' + a[2] + "</svg>" : "";
-    },
-    // the same picture as an image address, for the settings list
+    // the picture as an image address (a square; the page rounds it), or "" for an id it does not know
     url: function (id) {
-      var h = window.AVATARS.html(id);
-      return h ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(h.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ')) : "";
+      var a = BY[id];
+      return a ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="' + a[1] + '"/>' + a[2] + "</svg>") : "";
+    },
+    // the picture as an <img> for the page: a long list of them is cheaper to redraw than inline svg
+    html: function (id) {
+      var u = window.AVATARS.url(id);
+      return u ? '<img src="' + u + '" alt="" draggable="false">' : "";
     }
   };
 })();

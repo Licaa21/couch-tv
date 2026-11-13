@@ -57,6 +57,12 @@
     });
   }
 
+  // What the server is asked for with each item: both kinds of picture tags (a show's own for its episodes), the
+  // play position and the length. Without these a real server leaves out the show-level pictures, and the
+  // posters (a show's cover) were missing.
+  var FIELDS = "PrimaryImageAspectRatio,ImageTags,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,ParentThumbItemId," +
+    "SeriesPrimaryImageTag,ParentPrimaryImageTag,SeriesName,SeriesId,ParentIndexNumber,IndexNumber,UserData,RunTimeTicks";
+
   function image(cfg, it) {
     var id = it.Id, type, tag;
     if (it.BackdropImageTags && it.BackdropImageTags[0]) { type = "Backdrop"; tag = it.BackdropImageTags[0]; }
@@ -80,19 +86,107 @@
     var ep = it.Type === "Episode";
     var jf = { serverid: it.ServerId, id: it.Id, type: ep ? "episode" : "movie" };
     if (ep) { jf.seasonid = it.SeasonId; jf.seriesid = it.SeriesId; }
+    var run = it.RunTimeTicks || 0, pos = (it.UserData && it.UserData.PlaybackPositionTicks) || 0;
     return {
       id: it.Id, wn: true, app: app, jf: jf,
       title: ep ? (it.SeriesName || it.Name) : it.Name,
       episode_title: ep ? it.Name : null,
       season: ep ? it.ParentIndexNumber : null, episode: ep ? it.IndexNumber : null,
       progress: it.UserData && it.UserData.PlayedPercentage ? it.UserData.PlayedPercentage / 100 : 0,
+      next: !!it._next,   // an episode not started yet, from Next up
+      left: run && pos ? Math.max(1, Math.round((run - pos) / 600000000)) : 0,   // minutes left
       backdrop: image(cfg, it), poster: poster(cfg, it)
     };
   }
 
+  // ---------- the pictures kept on the TV, for when the server is off ----------
+  // The server comes first, always. Each time the row is read from it, its pictures are saved here (the saved
+  // set is replaced, so it only ever holds what the row shows) and the time is noted. Only when the server
+  // cannot be reached are the saved copies shown instead, and after three days without it they are dropped.
+  var IDB = "couch-jf", AT = "couch.jf.at", TTL = 3 * 86400000;
+  var db = null, saved = {}, down = false, lastUpdate = 0;   // saved: a picture's server address -> its saved copy
+
+  function idb(cb) {
+    if (db) return cb(db);
+    try {
+      var r = indexedDB.open(IDB, 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore("img", { keyPath: "u" }); };
+      r.onsuccess = function () { db = r.result; cb(db); };
+      r.onerror = function () { cb(null); };
+    } catch (e) { cb(null); }
+  }
+  function allSaved(cb) {
+    idb(function (d) {
+      if (!d) return cb([]);
+      var out = [];
+      try {
+        var cur = d.transaction("img").objectStore("img").openCursor();
+        cur.onsuccess = function (ev) { var c = ev.target.result; if (c) { out.push(c.value); c.continue(); } else cb(out); };
+        cur.onerror = function () { cb(out); };
+      } catch (e) { cb(out); }
+    });
+  }
+  function putImg(u, blob) { idb(function (d) { try { if (d) d.transaction("img", "readwrite").objectStore("img").put({ u: u, blob: blob }); } catch (e) {} }); }
+  function delImg(u) { idb(function (d) { try { if (d) d.transaction("img", "readwrite").objectStore("img").delete(u); } catch (e) {} }); }
+  function clearImgs() { idb(function (d) { try { if (d) d.transaction("img", "readwrite").objectStore("img").clear(); } catch (e) {} }); }
+  function keep(u, blob) { try { if (saved[u]) URL.revokeObjectURL(saved[u]); saved[u] = URL.createObjectURL(blob); } catch (e) {} }
+  function stale() { var at = parseInt(localStorage.getItem(AT) || "0", 10); return !!at && Date.now() - at > TTL; }
+  function blobOf(u, cb) {
+    var x = new XMLHttpRequest();
+    x.open("GET", u);
+    x.responseType = "blob";
+    x.timeout = 15000;
+    x.onload = function () { cb(x.status === 200 && x.response ? x.response : null); };
+    x.onerror = x.ontimeout = function () { cb(null); };
+    x.send();
+  }
+
+  // Load what was saved last time (and drop it if the server has been off for days).
+  function preload() {
+    if (stale()) { clearImgs(); return; }
+    allSaved(function (list) {
+      list.forEach(function (r) { keep(r.u, r.blob); });
+      if (down) redraw();
+    });
+  }
+  // The row was just read from the server: make the saved set match it.
+  var syncing = false;
+  function syncImages(urls) {
+    if (syncing) return;   // the last pass is still going (a slow TV); the next refresh will catch up
+    syncing = true;
+    setTimeout(function () { syncing = false; }, 60000);   // never stuck if a pass dies half way
+    var want = {};
+    urls.forEach(function (u) { if (u) want[u] = true; });
+    allSaved(function (list) {
+      var have = {};
+      list.forEach(function (r) {
+        if (want[r.u]) have[r.u] = true;
+        else { delImg(r.u); if (saved[r.u]) { try { URL.revokeObjectURL(saved[r.u]); } catch (e) {} delete saved[r.u]; } }
+      });
+      var todo = Object.keys(want).filter(function (u) { return !have[u]; }), running = 0;
+      (function pump() {
+        if (!todo.length && !running) syncing = false;
+        while (running < 3 && todo.length) {
+          (function (u) {
+            running++;
+            blobOf(u, function (b) { running--; if (b) { putImg(u, b); keep(u, b); } pump(); });
+          })(todo.shift());
+        }
+      })();
+    });
+  }
+  // A card's picture did not load from the server: show its saved copy, if there is one.
+  function fb(img) {
+    var u = img.getAttribute("src");
+    if (saved[u] && !img.getAttribute("data-fb")) { img.setAttribute("data-fb", "1"); img.src = saved[u]; }
+  }
+  // The row changed: redraw just the row (app.js tv.shelf), else the whole home.
+  function redraw() { var tv = window.tv; if (tv && tv.shelf) tv.shelf(); else if (tv && tv.refresh) tv.refresh(); }
+  function setDown(v) { if (v !== down) { down = v; redraw(); } }
+
   // Continue watching: the current endpoint first, the old one for an older server.
   function resume(cfg, done) {
-    var q = "Limit=" + PER + "&MediaTypes=Video&EnableUserData=true&EnableImageTypes=Backdrop,Thumb,Primary";
+    var q = "Limit=" + PER + "&MediaTypes=Video&EnableUserData=true&EnableImageTypes=Backdrop,Thumb,Primary&Fields=" + FIELDS;
     get(cfg, "/UserItems/Resume?userId=" + cfg.uid + "&" + q, function (err, j) {
       if (!err) return done(null, j);
       get(cfg, "/Users/" + cfg.uid + "/Items/Resume?" + q, done);
@@ -101,7 +195,7 @@
 
   // Next up: the next episode of each show you are following, one you have not started yet.
   function nextUp(cfg, done) {
-    get(cfg, "/Shows/NextUp?UserId=" + cfg.uid + "&Limit=" + PER + "&EnableUserData=true&EnableImageTypes=Backdrop,Thumb,Primary", done);
+    get(cfg, "/Shows/NextUp?UserId=" + cfg.uid + "&Limit=" + PER + "&EnableUserData=true&EnableImageTypes=Backdrop,Thumb,Primary&Fields=" + FIELDS, done);
   }
 
   // The two rows as one, the way Moonfin's own home does it: what is in progress, then the next episodes
@@ -114,7 +208,9 @@
       seen[it.Id] = true;
       if (it.SeriesId && d && (!lastOf[it.SeriesId] || d > lastOf[it.SeriesId])) lastOf[it.SeriesId] = d;
     });
-    var all = resumeItems.concat(nextItems.filter(function (it) { return !seen[it.Id]; })).map(function (it, i) {
+    var fresh = nextItems.filter(function (it) { return !seen[it.Id]; });
+    fresh.forEach(function (it) { it._next = true; });
+    var all = resumeItems.concat(fresh).map(function (it, i) {
       return { it: it, i: i, d: (it.UserData && it.UserData.LastPlayedDate) || lastOf[it.SeriesId] || "" };
     });
     all.sort(function (a, b) { return a.d && b.d ? (a.d < b.d ? 1 : a.d > b.d ? -1 : a.i - b.i) : a.d ? -1 : b.d ? 1 : a.i - b.i; });
@@ -126,42 +222,66 @@
     if (!cfg || busy || (!force && Date.now() - lastTry < 30000)) { if (done) done(null); return; }
     busy = true; lastTry = Date.now();
     withUser(cfg, function (err, c) {
-      if (err) { busy = false; if (done) done(err); return; }
+      if (err) { busy = false; if (err === "net") setDown(true); if (done) done(err); return; }
       write(CFG, c);
       resume(c, function (err2, j) {
-        if (err2) { busy = false; if (done) done(err2); return; }
+        if (err2) { busy = false; if (err2 === "net") setDown(true); if (done) done(err2); return; }
         // a server with no Next up (or one that fails) still shows what is in progress
         nextUp(c, function (err3, n) {
           busy = false;
           var app = { package: moonId(), name: "Moonfin" };
           var items = combine(j.Items || [], err3 || !n ? [] : n.Items || []);
-          var out = JSON.stringify(items.map(function (it) { return card(c, it, app); }));
+          var cards = items.map(function (it) { return card(c, it, app); });
+          var out = JSON.stringify(cards);
           var changed = out !== localStorage.getItem(ROWS);
-          try { localStorage.setItem(ROWS, out); } catch (e) {}
-          if (changed && window.tv && window.tv.refresh) window.tv.refresh();
+          try { localStorage.setItem(ROWS, out); localStorage.setItem(AT, String(Date.now())); } catch (e) {}
+          var wasDown = down;
+          down = false;
+          syncImages(cards.reduce(function (a, k) { return a.concat([k.backdrop, k.poster]); }, []));
+          if (changed || wasDown) { lastUpdate = Date.now(); redraw(); }
           if (done) done(null, items.length);
         });
       });
     });
   }
 
-  // What the home asks for each time it reads its lists: last time's rows now, fresh ones soon.
+  // What the home asks for each time it reads its lists: last time's rows now, fresh ones soon. With the server
+  // off, the row is made from the saved pictures; after three days off it is dropped.
   function watchNext() {
     refresh(false);
-    return JSON.stringify(read(ROWS) || []);
+    if (stale()) return "[]";
+    var rows = read(ROWS) || [];
+    if (down) rows.forEach(function (r) { if (saved[r.backdrop]) r.backdrop = saved[r.backdrop]; if (saved[r.poster]) r.poster = saved[r.poster]; });
+    return JSON.stringify(rows);
   }
 
   // A card was opened: Moonfin gets the title the way Samsung's Smart Hub hands one to it.
-  function open(id) {
-    var row = (read(ROWS) || []).filter(function (r) { return String(r.id) === String(id); })[0];
-    if (!row) return false;
+  function launchOnce(row, app) {
     try {
       var data = [new tizen.ApplicationControlData("PAYLOAD", [JSON.stringify({ values: JSON.stringify(row.jf) })])];
       var ctl = new tizen.ApplicationControl("http://samsung.com/appcontrol/operation/eden_resume", null, null, null, data);
-      tizen.application.launchAppControl(ctl, moonId(), function () {}, function () { toast(t("jf_no_moonfin")); });
-      return true;
-    } catch (e) { toast(t("jf_no_moonfin")); return false; }
+      tizen.application.launchAppControl(ctl, app, function () {}, function () { toast(t("jf_no_moonfin")); });
+    } catch (e) { toast(t("jf_no_moonfin")); }
   }
+  function open(id) {
+    var row = (read(ROWS) || []).filter(function (r) { return String(r.id) === String(id); })[0];
+    if (!row) return false;
+    var app = moonId();
+    function go() { launchOnce(row, app); }
+    try {
+      tizen.application.getAppsContext(function (list) {
+        go();
+        // Moonfin already open, or in the background, may only come forward and not read the title, so it is
+        // asked once more when it is in front
+        if ((list || []).some(function (c) { return c.appId === app; })) setTimeout(go, 1800);
+      }, go);
+    } catch (e) { go(); }
+    return true;
+  }
+
+  // The row follows the server: read again every minute while the home is on screen.
+  setInterval(function () { if (!document.hidden) refresh(true); }, 60000);
+  preload();
 
   // ---------- how the row looks: a layout and a size, kept on this TV ----------
   // "open": posters, the focused one opens into its backdrop (Moonfin's home). "posters": posters only.
@@ -176,7 +296,6 @@
     var h = SIZES[size], n = (layout === "wide" ? 1.775 : 0.675) * h;
     return { layout: layout, size: size, h: h, n: n, f: layout === "open" ? 1.775 * h : n };
   }
-  function redraw() { if (window.tv && window.tv.refresh) window.tv.refresh(); }
 
   // A small panel in the corner; the real home, with the real row, stays in view and changes as you pick.
   function openLook(onClose) {
@@ -256,7 +375,7 @@
         });
       });
     }
-    function forget() { write(CFG, null); write(ROWS, null); if (window.tv && window.tv.refresh) window.tv.refresh(); close(); }
+    function forget() { write(CFG, null); write(ROWS, null); try { localStorage.removeItem(AT); } catch (e) {} clearImgs(); saved = {}; redraw(); close(); }
     // A box is read-only until OK is pressed on it, so moving over it does not raise the TV's keyboard.
     // Pressing OK makes it editable and the keyboard opens; its Done (or Back) puts it back.
     var editing = null, reopening = false;
@@ -302,6 +421,6 @@
 
   // Home settings (app.js) has a Jellyfin section: it opens these two screens and shows the server.
   window.MoonfinTV = { watchNext: watchNext, open: open, setup: setup, openLook: openLook, look: look,
-    server: function () { var c = read(CFG); return c && c.server ? c.server : ""; },
+    server: function () { var c = read(CFG); return c && c.server ? c.server : ""; }, fb: fb, updated: function () { return lastUpdate; },
     refresh: function (force) { refresh(force); } };
 })();

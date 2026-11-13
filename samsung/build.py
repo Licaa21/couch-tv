@@ -14,6 +14,8 @@ else config.example.json) as the copy the TV uses when the computer is off.
 --log-url sends the page's console and a copy of the screen's HTML to a computer, for testing.
 """
 import argparse
+import html
+import urllib.parse
 import json
 import os
 import shutil
@@ -89,7 +91,7 @@ def main():
     html = html.replace("<body>", '<body>\n<div id="splash"><i></i></div>', 1)
     html = html.replace(tag, '<script src="$WEBAPIS/webapis/webapis.js"></script>\n'
                              '<script src="settings.js"></script>\n<script src="tizen-apps.js"></script>\n'
-                             '<script src="avatars.js"></script>\n<script src="moonfin.js"></script>\n<script src="tizen.js"></script>\n' + tag)
+                             '<script src="avatars.js"></script>\n<script src="weather.js"></script>\n<script src="panel.js"></script>\n<script src="moonfin.js"></script>\n<script src="tizen.js"></script>\n' + tag)
     with open(index, "w") as f:
         f.write(html)
 
@@ -107,6 +109,18 @@ def main():
                 "  try { t = localStorage.getItem(\"couch.configjs\"); } catch (e) {}\n"
                 "  if (t) try { (0, eval)(t); } catch (e) {}\n"
                 "  if (!window.COUCH_CONFIG) window.COUCH_CONFIG = " + json.dumps(pub) + ";\n})();\n")
+    # config.xml: with no bridge boot.html has nothing to ask, so the app opens the home itself (one page load
+    # fewer); and background-support is on, so the app stays alive when another app is in front and comes back
+    # at once instead of freezing for several seconds while it wakes
+    cx = os.path.join(stage, "config.xml")
+    with open(cx, encoding="utf-8") as f:
+        xml = f.read()
+    if not a.bridge:
+        assert '<content src="boot.html"/>' in xml, "config.xml no longer has the boot.html content tag"
+        xml = xml.replace('<content src="boot.html"/>', '<content src="index.html?offline=1&amp;alone=1' + ('&amp;tv=' + html.escape(urllib.parse.quote(a.tv), quote=True) if a.tv else '') + '"/>')
+    xml = xml.replace('background-support="disable"', 'background-support="enable"')
+    with open(cx, "w", encoding="utf-8", newline="\n") as f:
+        f.write(xml)
     # Per-TV settings, from this TV's entry in config.json.
     tv_cfg = next((t for t in config.TVS if t["id"] == (a.tv or config.DEFAULT_TV)), None)
     if a.tv and tv_cfg is None:

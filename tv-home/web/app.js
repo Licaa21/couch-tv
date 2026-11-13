@@ -101,7 +101,7 @@
   }
   // Home settings made on this TV with the gear tile (see "home settings" below). They win over
   // config.js. ST is the saved object; the rest are read from it in readConfig().
-  var ST = {}, WX_SHOW = true, WX_F = false, WX_EVERY = 30, HIDDEN_TV = [];
+  var ST = {}, WX_SHOW = true, WX_F = false, WX_EVERY = 30, HIDDEN_TV = [], MORE_ON = true;   // MORE_ON: the dock's More apps tile
   var IDLE_PHOTO_STEPS = [0, 5, 10, 15, 30, 60];
   var IDLE_PHOTO_SECONDS = 0, idlePhotoTimer = null, idlePhotoActive = false;
   var WX_AMBIENT = true, WX_SUN_GRADE = true;
@@ -240,6 +240,8 @@
     xbox: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M7.5 7.5c2.5 2.5 6.5 2.5 9 0M7.5 16.5c2.5-2.5 6.5-2.5 9 0M7 8c2 3.5 2 4.5 0 8M17 8c-2 3.5-2 4.5 0 8"/></svg>',
     switch: '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="6" height="16" rx="3"/><rect x="13" y="4" width="6" height="16" rx="3"/><circle cx="8" cy="8" r="1" class="fill"/><circle cx="16" cy="14" r="1" class="fill"/></svg>',
     jellyfin: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M10 8.5l5 3.5-5 3.5z"/></svg>',
+    jplay: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/></svg>',
+    jnext: '<svg viewBox="0 0 24 24"><path d="M5 12h12M12 6l6 6-6 6"/></svg>',
     tv: '<svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/></svg>',
     hdmi: '<svg viewBox="0 0 24 24"><path d="M4 8h16v5l-3 4H7l-3-4z"/><path d="M8 8v3M11 8v3M13 8v3M16 8v3"/></svg>',
     screensaver: '<svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="14" rx="2.5"/><path d="M15.2 7.3a3.4 3.4 0 1 0 2.1 5 3.9 3.9 0 0 1-2.1-5z"/></svg>',
@@ -375,6 +377,7 @@
     WX_SHOW = ST.wx_show !== false;
     WX_F = (ST.wx_unit || HOME.wx_unit) === "f";   // Home settings, else home.wx_unit in config.json
     WX_EVERY = [15, 30, 60].indexOf(ST.wx_every) >= 0 ? ST.wx_every : 30;
+    MORE_ON = typeof ST.more_button === "boolean" ? ST.more_button : true;
     WX_AMBIENT = typeof ST.ambient_weather === "boolean" ? ST.ambient_weather : HOME.ambient_weather === true;   // off unless chosen
     WX_SUN_GRADE = typeof ST.ambient_sun_grade === "boolean" ? ST.ambient_sun_grade : HOME.ambient_sun_grade === true;
     var mine = TV_ID || CFG.default_tv;
@@ -660,7 +663,7 @@
   ];
   var BUILT_IN = SCENE_LIB.slice();   // readConfig() adds your own scenes to SCENE_LIB
   var SCENES = SCENE_LIB.slice(), SCENE_MS = 20000, SUN_SYNC = false;
-  var scene = 0, sceneEls = [], glassShown = "", lastKeyAt = 0;
+  var scene = 0, sceneEls = [], glassShown = "", lastKeyAt = 0, lastRepeatAt = 0;
 
   // Your own scenes (home.my_scenes in config.json), made with tools/make-scene.py: the photo, glass
   // copy and cut-out in backgrounds/mine/, and how its clock looks. Anything odd falls back to the
@@ -781,9 +784,10 @@
   function drawClocks(el, s, hm) {
     if (!hm) return;
     var cs = el.querySelectorAll(".gclock");
-    for (var k = 0; k < cs.length; k++) {
+    for (var k = 0; k < cs.length; k++) cs[k].innerHTML = '<span class="edge">' + hm + '</span><span class="fill">' + hm + '</span><span class="sheen">' + hm + '</span><span class="rim">' + hm + "</span>";
+    fitScene(el);   // raised first when the row would cover it, so the glass below is measured where the clock now is
+    for (k = 0; k < cs.length; k++) {
       var c = cs[k];
-      c.innerHTML = '<span class="edge">' + hm + '</span><span class="fill">' + hm + '</span><span class="sheen">' + hm + '</span><span class="rim">' + hm + "</span>";
       var f = c.querySelector(".fill"), ex = c.offsetLeft + f.offsetLeft, ey = c.offsetTop + f.offsetTop;
       if (CLOCK_LIQUID) {
         // Liquid glass (#25): the sharp photo seen through the digits, magnified LENS times about
@@ -893,6 +897,7 @@
         root.style.setProperty("--my-size", s.size * 100 + "vh");
       }
       root.className = root.className.replace(/\b(scene|mine)-\w+/g, "").replace(/\s+/g, " ").trim() + cls;
+      root.style.setProperty("--cdy-r", sceneEls[i].style.getPropertyValue("--cdy") || "0px");   // the date rises with this scene's clock
       date.classList.remove("swap");
       fitDate();
     }, 600);
@@ -1907,7 +1912,9 @@
   // ---------------- who is watching: none, a pill switch for two, a head icon and a list for more ----------------
   var PALETTE = ["#ff9f0a", "#30b350", "#0a84ff", "#bf5af2", "#ff375f", "#00a5a8", "#5e5ce6", "#ac8e68"];
   function peopleCount() { return NOBODY ? 0 : PEOPLE.length; }
-  function isHead() { return peopleCount() >= 3; }
+  // the Samsung app shows the one person's picture too, as the head icon (the list opens on OK to rename or change it)
+  function solo() { return peopleCount() === 1 && !!window.MoonfinTV; }
+  function isHead() { return peopleCount() >= 3 || solo(); }
   function colourOf(p) {
     if (p.colour) return p.colour;
     for (var h = 0, i = 0; i < p.id.length; i++) h = (h * 31 + p.id.charCodeAt(i)) >>> 0;
@@ -1922,9 +1929,9 @@
 
   function renderPeople() {
     var el = $("people"), n = peopleCount();
-    el.classList.toggle("none", n < 2);
-    el.classList.toggle("head", n >= 3);
-    if (n >= 3) {
+    el.classList.toggle("none", !peopleOn());
+    el.classList.toggle("head", isHead());
+    if (isHead()) {
       var cur = PEOPLE[whoIndex()];
       el.innerHTML = avatarHTML(cur) + '<span class="sr">' + esc(cur.name) + "</span>";
     } else {
@@ -2063,6 +2070,8 @@
 
   // Keep watching shows up to ten per person; the row slides along under the remote.
   var KEEP_MAX = window.MoonfinTV ? 20 : 10;   // the Samsung app's Continue watching and Next up are one row
+  // What the Jellyfin row showed last, so a redraw only moves what changed.
+  var jprev = { sig: "", ids: {}, prog: {} }, jliveT = null;
   // The Jellyfin row loads a card's backdrop only once the card is focused.
   function loadBackdrop(el) {
     var im = el && el.querySelector ? el.querySelector("img[data-src]") : null;
@@ -2096,17 +2105,47 @@
       return;
     }
     if (jrow) {
-      // Moonfin's look: a poster per title with its name underneath; the focused one opens out into its backdrop
+      // Moonfin's look: a poster per title with its name underneath; the focused one opens out into its backdrop.
+      // The row is only built again when it changed (a rebuild reloads every picture, which a slow TV feels), and
+      // what changed moves: new cards slide in, progress bars grow to their new place.
+      var lay = jl ? jl.layout : "open";
+      var sig = who + "|" + lay + (jl ? jl.size : "") + "|" + data.shows.map(function (it) {
+        return it.id + ":" + Math.round((it.progress || 0) * 100) + ":" + (it.next ? 1 : 0) + ":" + (it.left || 0) + ":" + (it.poster || "") + ":" + (it.backdrop || "");
+      }).join(",");
+      if (sig === jprev.sig && track.children.length === data.shows.length && track.firstElementChild && track.firstElementChild.classList.contains("jcard")) {
+        shelfEls = Array.prototype.slice.call(track.children);
+        return;
+      }
+      var fresh = 0;
       track.innerHTML = data.shows.map(function (it) {
-        var pic = slim(it.poster || it.backdrop), wide = slim(it.backdrop || it.poster), lay = jl ? jl.layout : "open";
+        var pic = slim(it.poster || it.backdrop), wide = slim(it.backdrop || it.poster);
         var sub = it.season && it.episode ? "S" + it.season + " E" + it.episode + (it.episode_title ? "  ·  " + it.episode_title : "") : "";
-        return '<div class="tile jcard"><div class="jface">' +
-          (pic && lay !== "wide" ? '<img class="jp" src="' + esc(pic) + '" alt="" decoding="async">' : "") +
-          (wide && lay === "wide" ? '<img class="jb" src="' + esc(wide) + '" alt="" decoding="async">' : "") +
-          (wide && lay === "open" ? '<img class="jb" data-src="' + esc(wide) + '" alt="" decoding="async">' : "") +
-          (it.progress ? '<span class="jbar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "") +
+        var isNew = !jprev.ids[it.id], pct = Math.round((it.progress || 0) * 100);
+        var from = jprev.prog[it.id] != null ? jprev.prog[it.id] : (isNew ? 0 : pct);
+        var chip = it.next ? t("jf_next") : it.left ? t("jf_left", { n: it.left }) : "";
+        var fb = ' onerror="window.MoonfinTV&&MoonfinTV.fb(this)"';   // the server is off: the saved copy
+        return '<div class="tile jcard' + (isNew ? " jnew" : "") + (it.next ? " jnext" : "") + '"' +
+          (isNew ? ' style="animation-delay:' + Math.min(fresh++, 8) * 55 + 'ms"' : "") + '><div class="jface">' +
+          (pic && lay !== "wide" ? '<img class="jp" src="' + esc(pic) + '" alt="" decoding="async"' + fb + ">" : "") +
+          (wide && lay === "wide" ? '<img class="jb" src="' + esc(wide) + '" alt="" decoding="async"' + fb + ">" : "") +
+          (wide && lay === "open" ? '<img class="jb" data-src="' + esc(wide) + '" alt="" decoding="async"' + fb + ">" : "") +
+          (it.next ? '<span class="jbadge">' + ICONS.jnext + "</span>" : "") +
+          (pct ? '<span class="jbar"><i style="width:' + from + '%" data-w="' + pct + '"></i></span>' : "") +
+          '<div class="jover"><span class="jplay">' + ICONS.jplay + "</span>" + (chip ? '<span class="jchip">' + esc(chip) + "</span>" : "") + "</div>" +
           '</div><div class="jcap"><b>' + esc(it.title) + "</b><i>" + esc(sub) + "</i></div></div>";
       }).join("");
+      jprev = { sig: sig, ids: {}, prog: {} };
+      data.shows.forEach(function (it) { jprev.ids[it.id] = true; jprev.prog[it.id] = Math.round((it.progress || 0) * 100); });
+      setTimeout(function () {   // the bars grow from where they were
+        Array.prototype.forEach.call(track.querySelectorAll(".jbar i[data-w]"), function (b) { b.style.width = b.getAttribute("data-w") + "%"; });
+      }, 80);
+      // a small live dot by the heading for a few seconds after the row was read from the server
+      var upd = window.MoonfinTV && window.MoonfinTV.updated ? window.MoonfinTV.updated() : 0;
+      if (upd && Date.now() - upd < 6000) {
+        jsec.classList.add("jlive");
+        clearTimeout(jliveT);
+        jliveT = setTimeout(function () { jsec.classList.remove("jlive"); }, 6000);
+      }
       shelfEls = Array.prototype.slice.call(track.children);
       if (jsec.classList.contains("jpeek")) loadBackdrop(shelfEls[0]);   // the look panel shows the first card as focused
       return;
@@ -2117,7 +2156,7 @@
         var art = slim(it.backdrop || it.poster), pkg = it.app && it.app.package;
         var ep = it.season && it.episode ? "S" + it.season + " E" + it.episode : (it.episode_title || "");
         return '<div class="tile ncard">' +
-          (art ? '<img class="thumb" src="' + esc(art) + '" alt="" decoding="async">' : '<span class="thumb none"></span>') +
+          (art ? '<img class="thumb" src="' + esc(art) + '" alt="" decoding="async"' + (it.jf ? ' onerror="window.MoonfinTV&&MoonfinTV.fb(this)"' : "") + ">" : '<span class="thumb none"></span>') +
           '<div class="t"><div class="nap">' + (pkg && iconUrl(pkg) ? '<img src="' + esc(iconUrl(pkg)) + '" alt="" onerror="this.remove()">' : "") +
           esc(it.app ? it.app.name : "") + "</div><b>" + esc(it.title) + "</b>" + (ep ? "<i>" + esc(ep) + "</i>" : "") +
           (it.progress ? '<span class="nbar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "") + "</div></div>";
@@ -2135,6 +2174,68 @@
         badge + bar + '</div><div class="caption"><b>' + esc(it.title) + "</b><span>" + esc(subtitle(it)) + "</span></div></div>";
     }).join("");
     shelfEls = Array.prototype.slice.call(track.children);
+  }
+
+  // The Samsung app's Jellyfin row changed (moonfin.js): redraw just the row, the focus staying where it was.
+  function reloadShelf() {
+    if (!(TV && TV.watchNext && OFFLINE && KW_ON)) { refresh(); return; }
+    // never reshuffle the row under a lift or an open menu: try again in a few seconds
+    if (lift || ["pmenu", "settings", "gear", "smart", "updask", "shelfmenu", "appmenu", "menu", "inputs"].indexOf(zone) >= 0) { setTimeout(reloadShelf, 4000); return; }
+    var wn = [];
+    try { wn = JSON.parse(TV.watchNext()) || []; } catch (e) {}
+    var skipPkgs = (window.COUCH_CONFIG && window.COUCH_CONFIG.home && window.COUCH_CONFIG.home.skip_watch_next) || [];
+    var dismissed = kept("tvhome.dismissed_shows") || [];
+    wn = wn.filter(function (it) {
+      var pkg = (it.app && it.app.package) || it.package || "";
+      return skipPkgs.indexOf(pkg) === -1 && dismissed.indexOf(String(it.id || "")) === -1 && dismissed.indexOf(pkg + "|" + (it.title || "")) === -1;
+    });
+    PEOPLE.forEach(function (p) { data.showsBy[p.id] = wn; });
+    renderShelf();
+    if (zone === "shelf") { s = Math.max(0, Math.min(s, shelfEls.length - 1)); paintFocus(); }
+    fitClocks();
+  }
+
+  // ---------------- the row must not cover the clock (the Samsung app) ----------------
+  // Each scene puts its clock somewhere else, and a taller row reaches up further, so the clock is raised, never
+  // squeezed, by just as much as the row reaches into it (as far as the date line allows). The bottom of the
+  // digits is found with a zero size marker sitting on the text's baseline.
+  var fitRowTop = 100000;
+  var DIGIT_EM = 0.87;   // how tall the clock font's digits are, in em (Antonio, measured)
+  function fitScene(el) {
+    if (!window.MoonfinTV) return;
+    var cs = el.querySelectorAll(".gclock"), c = cs[0], f = c && c.querySelector(".fill"), q;
+    if (!f) return;
+    for (q = 0; q < cs.length; q++) cs[q].style.fontSize = "";   // measured as the scene draws it
+    el.style.setProperty("--cdy", "0px");
+    var m = document.createElement("i");
+    m.style.cssText = "display:inline-block;width:0;height:0";
+    f.appendChild(m);
+    var base = m.getBoundingClientRect().bottom;
+    f.removeChild(m);
+    var fs = parseFloat(getComputedStyle(c).fontSize) || 0, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") ? 100000 : sec.getBoundingClientRect().top;
+    if (document.documentElement.classList.contains("cp-open")) rowTop = fitRowTop;   // the widgets page is up: the row has scrolled away
+    else fitRowTop = rowTop;
+    var target = rowTop - 0.6 * rem, need = base + 0.01 * fs - target;   // need: how far the digits reach into the row
+    var dy = 0, k = 1;
+    if (need > 0) {
+      var room = base - DIGIT_EM * fs - 9 * rem;   // how far they can rise before the date line
+      dy = Math.min(need, Math.max(0, room));
+      if (need - dy > 1) {
+        // still too low (a big clock, a tall row): smaller too, about the top of its box, by what is missing
+        var top = c.getBoundingClientRect().top - dy, bottom = base + 0.01 * fs - dy;
+        k = Math.max(0.6, (target - top) / (bottom - top));
+      }
+    }
+    el.style.setProperty("--cdy", Math.round(dy) + "px");
+    if (el.classList.contains("on")) document.documentElement.style.setProperty("--cdy-r", Math.round(dy) + "px");   // the date line rises with it
+    if (k < 1) for (q = 0; q < cs.length; q++) cs[q].style.fontSize = (fs * k).toFixed(1) + "px";
+  }
+  // all the scenes again: the glass in the digits is cut from where the clock now is
+  function fitClocks() {
+    if (!window.MoonfinTV || !NIGHT || !sceneEls.length) return;
+    glassShown = "";
+    clock();
   }
 
   // ---------------- apps ----------------
@@ -2209,7 +2310,7 @@
     var tools = toolItems();
     if (expanded) return list.concat(extra, tools);
     if (extra.length || list.length > GRID_MAX - tools.length) {
-      list = list.slice(0, GRID_MAX - 1 - tools.length).concat(tools, [moreItem()]);
+      list = MORE_ON ? list.slice(0, GRID_MAX - 1 - tools.length).concat(tools, [moreItem()]) : list.slice(0, GRID_MAX - tools.length).concat(tools);
     } else list = list.concat(tools);
     return list;
   }
@@ -2246,7 +2347,7 @@
     var arr = arrangeItems();
     var list = expanded ? arr.items.slice() : arr.items.slice(0, arr.line);
     list = list.concat(toolItems());
-    if (!expanded && !(STANDALONE && !data.apps.length)) list.push(moreItem());   // standalone: no app list behind it
+    if (!expanded && MORE_ON && !(STANDALONE && !data.apps.length)) list.push(moreItem());   // standalone: no app list behind it
     return list;
   }
 
@@ -2661,11 +2762,13 @@
 
   function shelfOn() { return !$("shelf-section").classList.contains("empty"); }
   // the switcher shows for two or more people, also while nobody has anything yet (issue #23)
-  function peopleOn() { return peopleCount() >= 2; }
+  function peopleOn() { return peopleCount() >= 2 || solo(); }
   function toPeople() { zone = "people"; pi = whoIndex(); }
 
   function paintFocus() {
     saveFocusSoon();
+    // the arrow under the dock (panel.js): there is a page below while the home itself is in front
+    if (window.ControlPanel) window.ControlPanel.hint(!expanded && ["grid", "shelf", "people", "quick", "np"].indexOf(zone) >= 0);
     if (zone === "settings") { renderSettings(); return; }
     if (zone === "smart") { window.smartHome.paint(); return; }
     if (zone === "ambient") { renderAmbientMusic(); return; }
@@ -2861,6 +2964,9 @@
         var at = -1;
         gridItems.forEach(function (x, i) { if (at < 0 && gridKey(x) === dockBack) at = i; });
         g = at >= 0 ? at : Math.min(g, gridEls.length - 1);
+      } else if (dy > 0 && window.ControlPanel && !expanded) {
+        window.ControlPanel.open();   // the widgets page below the dock (the Samsung app's panel.js)
+        return;
       }
     }
     paintFocus();
@@ -2870,7 +2976,7 @@
   function startFocus() {
     s = 0; g = 0;
     if (ambientOpen && AMBIENT_MUSIC && npVisible()) zone = "ambient";   // the music screen is up: the remote stays on it
-    else if (peopleOn()) toPeople();
+    else if (peopleCount() >= 2) toPeople();   // a lone person's picture is only shown, the remote starts on the row
     else zone = shelfEls.length ? "shelf" : "grid";
   }
 
@@ -3665,7 +3771,11 @@
   function appsRows() {
     var arr = arrangeItems(), rows = [];
     var hidden = data.apps.filter(function (a) { return HIDDEN_TV.indexOf(a.package) >= 0; });
-    if (!arr.items.length && !hidden.length) return [info("apps-none", t("apps_none"))];
+    // The More apps tile at the end of the dock can be taken away (apps below the line then only live in this list)
+    rows.push({ kind: "toggle", key: "more-btn", label: t("more_btn"), sub: MORE_ON ? "" : t("more_btn_off"), value: MORE_ON ? t("on") : t("off"), act: function () {
+      MORE_ON = !MORE_ON; ST.more_button = MORE_ON; saveSettings(); expanded = false; renderGrid();
+    } });
+    if (!arr.items.length && !hidden.length) return rows.concat([info("apps-none", t("apps_none"))]);
     var row = function (it, where) {
       return { kind: "item", key: "app:" + it.package, label: it.name, value: t(where), icon: it.package,
         act: function () { cycleApp(it.package); },
@@ -4242,8 +4352,10 @@
     var f = box.querySelector(".srow.focus");
     if (!f) { box.scrollTop = 0; return; }
     var top = f.offsetTop, bottom = top + f.offsetHeight, view = box.clientHeight, edge = view / 4;
+    if (SET.fast) box.style.scrollBehavior = "auto";
     if (top - edge < box.scrollTop) box.scrollTop = Math.max(0, top - edge);
     else if (bottom + edge > box.scrollTop + view) box.scrollTop = bottom + edge - view;
+    if (SET.fast) box.style.scrollBehavior = "";
   }
   function initSettings() {
     $("set-input").addEventListener("input", function () { if (SET.typing && SET.typing.live) SET.typing.live(this.value); });
@@ -4498,6 +4610,15 @@
   document.addEventListener("keydown", function (e) {
     lastKeyAt = Date.now();
     resetSmartIdle();
+    // Holding an arrow in Home settings sends a key about thirty times a second and each one redraws the
+    // list, so on a slow TV they piled up and the focus ran off the screen. Repeats are spaced out, and the
+    // list follows without its smooth scroll.
+    SET.fast = false;
+    if (zone === "settings" && e.repeat && !SET.typing && arrowOf(e)) {
+      if (lastKeyAt - lastRepeatAt < 110) { e.preventDefault(); return; }
+      lastRepeatAt = lastKeyAt;
+      SET.fast = true;
+    }
     if (screenOffActive) {
       e.preventDefault();
       e.stopPropagation();
@@ -4576,6 +4697,7 @@
     paintFocus();
     kidSync();
     if (kidsOn()) window.KidsMode.rerender();
+    fitClocks();
   }
 
   // The bridge's people list (the phone edits it). An order made on this TV while the bridge was
@@ -4711,6 +4833,12 @@
     home: function () { forgetFocus(); if (idleAmbientActive) { setIdleAmbient(false); resetSmartIdle(); return; } if (idlePhotoInput(null)) return; if (zone === "settings") closeSettings(); else goHome(); refresh(); resetIdlePhoto(); resetSmartIdle(); },
     // re-read the lists and redraw, nothing else (the Samsung app's Jellyfin row arrives late)
     refresh: function () { refresh(); },
+    shelf: function () { reloadShelf(); },   // just the Jellyfin row (moonfin.js)
+    homeSettings: function () { openSettings(); },   // from the widgets page (panel.js)
+    fitClocks: function () { fitClocks(); },
+    // the weather place and unit Home settings has, for the Samsung app's weather panel (weather.js)
+    clock24: function () { return CLOCK24; },
+    weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: WXCFG.place, timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },
     screenOff: function () { toggleScreenOff(true); },
     wakeScreen: function () { toggleScreenOff(false); },
     isScreenOff: function () { return screenOffActive; },
@@ -4791,6 +4919,7 @@
     }
     if (TV) data.apps = sortApps(nativeApps() || []);
     if (cached || TV) { render(); mark("home-painted-from-cache"); }
+    document.documentElement.classList.add("home-ready");
     if (NIGHT) $("np-slot").appendChild($("np"));   // Now playing: the first card of the row
     renderQuick();
     if (!OFFLINE) refreshQuick();

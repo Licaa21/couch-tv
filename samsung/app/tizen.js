@@ -72,9 +72,10 @@
       }
     });
     if (SKY_PORT) shown.unshift({ package: SKY, label: "Sky" });
+    shown.unshift({ package: WX, label: "Weather" });
     shown.unshift({ package: LIVE, label: "TV" });
   }
-  var SKY = "local.sky", LIVE = "local.tv", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
+  var SKY = "local.sky", LIVE = "local.tv", WX = "local.weather", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
   function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
   sortOut();
   send("log", "apps on this TV: " + tizenApps.length + ", shown: " + shown.map(function (a) { return a.label; }).join(", "));
@@ -98,7 +99,7 @@
         }
       }, function () {});
     } catch (e) {}
-  }, 4000);
+  }, tizenApps.length ? 9000 : 100);   // the first ever start has no list yet, so it asks at once
 
   // ---------- a Sky box on an HDMI input ("sky_hdmi" in this TV's entry in config.json) ----------
   // tvwindow shows the input full screen in front of this app. The Sky remote talks to the box, so
@@ -128,9 +129,9 @@
   }
 
   // Any input or live TV, the same way: the picked source full screen in front of this app.
-  // The TV's "connected" list is only a help: a 2021 Q67A listed just "TV 1" while a PS5 was on HDMI 2 (and
-  // opened by the TV's own HDMI 2 button). So when the list has no such source it is made from the type and
-  // port and handed to the TV window anyway; the TV says no if it really cannot.
+  // tvwindow only takes one of the TV's own source objects (a plain {type, number} is refused: "cannot convert
+  // Object to SystemInfoVideoSourceInfo"), and a 2021 Q67A listed just "TV 1" as connected while a PS5 was on
+  // HDMI 2. So the connected list is searched first and then the supported one, which names every port.
   function showSource(type, number, label) {
     var listed = "";
     function failed(step, e) {
@@ -147,14 +148,15 @@
         }, function (e) { failed("setSource", e); });
       } catch (e) { failed("setSource", e); }
     }
+    function names(a) { return (a || []).map(function (s) { return s.type + " " + s.number; }).join(", ") || "-"; }
     try {
       tizen.systeminfo.getPropertyValue("VIDEOSOURCE", function (info) {
-        var list = (info && info.connected) || [], src = null;
-        listed = list.map(function (s) { return s.type + " " + s.number; }).join(", ");
-        list.forEach(function (s) { if (!src && s.type === type && (type === "TV" || s.number === number)) src = s; });
-        go(src || { type: type, number: type === "TV" ? 1 : number });
-      }, function () { go({ type: type, number: type === "TV" ? 1 : number }); });
-    } catch (e) { go({ type: type, number: type === "TV" ? 1 : number }); }
+        var conn = (info && info.connected) || [], supp = (info && info.supported) || [], src = null;
+        listed = names(conn) + " | " + names(supp);
+        conn.concat(supp).forEach(function (s) { if (!src && s.type === type && (type === "TV" || s.number === number)) src = s; });
+        if (src) go(src); else failed(t("src_not_connected"), "");
+      }, function (e) { failed("list inputs", e); });
+    } catch (e) { failed("start", e); }
     return true;
   }
 
@@ -168,8 +170,9 @@
   try { extra = JSON.parse(localStorage.getItem(INPUTS_KEY) || "[]"); } catch (e) {}
   try {
     tizen.systeminfo.getPropertyValue("VIDEOSOURCE", function (info) {
-      extra = ((info && info.connected) || []).filter(function (s) {
-        return s.type !== "TV" && !(s.type === "HDMI" && s.number <= 4);
+      extra = ((info && info.connected) || []).filter(   // only what is plugged in; the supported list (every port) is only for opening one
+        function (s, i, all) {
+        return s.type !== "TV" && !(s.type === "HDMI" && s.number <= 4) && all.findIndex(function (o) { return o.type === s.type && o.number === s.number; }) === i;
       }).map(function (s) { return { type: s.type, number: s.number }; });
       try { localStorage.setItem(INPUTS_KEY, JSON.stringify(extra)); } catch (e) {}
     }, function () {});
@@ -231,6 +234,7 @@
   function launch(pkg) {
     if (pkg === SKY) return openSky();
     if (pkg === LIVE) return openInput("tv");
+    if (pkg === WX) { if (window.WeatherTV) window.WeatherTV.open(); return true; }
     if (pkg === "com.android.tv.settings") return openTvSettings();   // the gear menu's "TV settings"
     var a = byPkg[pkg], m = MAP[pkg];
     var ids = a ? [a.id] : [];
@@ -259,6 +263,7 @@
 
   function iconUrl(pkg) {
     if (pkg === SKY) return "logo-sky.png";
+    if (pkg === WX) return tileIcon('<circle cx="9" cy="9" r="3.4"/><path d="M9 2.5v1.6M9 13.9v1.6M2.5 9h1.6M15 9h1.6M4.4 4.4l1.1 1.1M12.5 12.5l1.1 1.1M13.6 4.4l-1.1 1.1M5.5 12.5l-1.1 1.1"/><path d="M9.5 20h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.4-1.2A4.1 4.1 0 0 0 9.5 20z"/>', "#2d7ff9");
     if (pkg === LIVE) return tileIcon('<rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/>', "#0a84ff");
     var m = MAP[pkg];
     if (m && m.logo) return "logos/" + pkg + ".png";
@@ -267,13 +272,14 @@
     return null;
   }
 
-  // The splash (build.py puts it first in index.html) covers the page until the home has drawn its apps, so
-  // there is a spinner, not a black screen and a lone "Keep watching", while the page loads or reloads.
+  // The splash (build.py puts it first in index.html) covers the page until the home has drawn its clock and
+  // photo (app.js adds home-ready), so there is a spinner, not a black screen and a lone "Keep watching", while
+  // the page loads or reloads. The dock and the row fill in over the home, not behind a spinner.
   (function () {
     var splash = document.getElementById("splash"), t0 = Date.now();
     if (!splash) return;
     (function wait() {
-      if (!document.querySelector(".tile.app") && Date.now() - t0 < 8000) { setTimeout(wait, 80); return; }
+      if (!document.documentElement.classList.contains("home-ready") && Date.now() - t0 < 6000) { setTimeout(wait, 40); return; }
       splash.className = "out";
       setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 320);
     })();
@@ -282,7 +288,9 @@
   window.TVOS = {
     // the TV tile's name is said in the language chosen, which is set after this file loads
     apps: function () {
-      return JSON.stringify(shown.map(function (a) { return a.package === LIVE ? { package: LIVE, label: t("tv_live") } : a; }));
+      return JSON.stringify(shown.map(function (a) {
+        return a.package === LIVE ? { package: LIVE, label: t("tv_live") } : a.package === WX ? { package: WX, label: t("sec_weather") } : a;
+      }));
     },
     launch: launch,
     iconUrl: iconUrl,
@@ -361,7 +369,7 @@
 
   // coming back to the app (after Netflix, say): read the lists again
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden && window.MoonfinTV) window.MoonfinTV.refresh(true);   // progress moved while Moonfin was open
+    if (!document.hidden && window.MoonfinTV) setTimeout(function () { window.MoonfinTV.refresh(true); }, 1500);   // progress moved while Moonfin was open
     if (!document.hidden && window.tv && window.tv.resume) window.tv.resume();
     if (!document.hidden && !polling) jobs();
   });

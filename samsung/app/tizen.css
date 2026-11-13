@@ -36,7 +36,7 @@
    section from the layout and size picked on the TV (moonfin.js look()), and one of the classes
    .jl-open (posters, the focused one opens into its backdrop), .jl-posters, .jl-wide.
    .jpeek (the look panel is open) shows the first card as focused. */
-.theme-night .shelf.jrow { top: calc(48.75rem - var(--jh)); }
+.theme-night .shelf.jrow { top: calc(48.75rem - var(--jh)); isolation: isolate; }
 .theme-night .shelf.jrow .shelf-head { height: 2rem; margin-bottom: 0.5rem; }
 .theme-night .shelf.jrow .shelf-head h2 { font-size: 1.375rem; line-height: 2rem; }
 .jcard { width: var(--jn); transition: width 260ms var(--ease), transform 260ms var(--ease); }
@@ -76,7 +76,7 @@
 
 /* A built-in profile picture (avatars.js) fills the round avatar. */
 .avatar.pic { padding: 0; overflow: hidden; background: none !important; }
-.avatar.pic svg { display: block; width: 100%; height: 100%; }
+.avatar.pic svg, .avatar.pic img { display: block; width: 100%; height: 100%; }
 
 /* Inputs and buttons take the app's font (a form control does not inherit it by itself), so Romanian letters match. */
 #jf-setup input, #jf-setup button { font-family: inherit; }
@@ -85,3 +85,167 @@
 html.lighter .jcard, html.lighter .jface { transition: none; }
 html.lighter .jface { box-shadow: none; }
 html.lighter .jcard.focus .jface, html.lighter .jpeek .jcard:first-child .jface { box-shadow: 0 0 0 0.1875rem #fff; }
+
+/* ---- the Jellyfin row, second look: badges, a play button and a chip on the focused card, a soft fade under
+   the row so the white text reads on a bright photo, cards that slide in when the row changes ---- */
+.theme-night .shelf.jrow::before {
+  content: ""; position: absolute; left: -5rem; right: -5rem; top: -3rem; bottom: -3rem; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(4, 8, 14, 0.5) 40%, rgba(4, 8, 14, 0.62) 100%);
+}
+.jface { border-radius: 1.125rem; box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.4), inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.16); }
+.jface::after {   /* a darker edge at the bottom of every card, under the bar and the title */
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55));
+}
+.jbadge {
+  position: absolute; top: 0.5rem; left: 0.5rem; z-index: 2; display: flex; align-items: center; justify-content: center;
+  width: 1.625rem; height: 1.625rem; border-radius: 50%; color: #fff; background: rgba(40, 120, 255, 0.92);
+  box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.4);
+}
+.jbadge svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.jbar { z-index: 2; height: 0.3125rem; border-radius: 0.1875rem; background: rgba(255, 255, 255, 0.28); }
+.jface .jbar i { border-radius: 0.1875rem; background: #fff; transition: width 900ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.jover { position: absolute; left: 0.875rem; right: 0.875rem; bottom: 1.125rem; z-index: 2; display: none; align-items: center; }
+.jcard.focus .jover, .jpeek .jcard:first-child .jover { display: flex; }
+.jplay {
+  display: flex; align-items: center; justify-content: center; flex: none; width: 2.75rem; height: 2.75rem; border-radius: 50%;
+  color: #111; background: rgba(255, 255, 255, 0.95); box-shadow: 0 0.25rem 0.875rem rgba(0, 0, 0, 0.45);
+}
+.jplay svg { width: 1.375rem; height: 1.375rem; margin-left: 0.125rem; }
+.jchip {
+  margin-left: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 1rem; line-height: 1.375rem; font-weight: 600; color: #fff;
+  background: rgba(0, 0, 0, 0.55); white-space: nowrap;
+}
+.jl-posters .jover { left: 0.375rem; right: 0.375rem; }
+.jl-posters .jchip { display: none; }   /* a poster is too narrow for a chip */
+.jcard.jnew { animation: jin 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes jin { from { opacity: 0; transform: translateY(1.25rem) scale(0.92); } to { opacity: 1; transform: none; } }
+/* a small dot by the heading for a few seconds after the row was read from the server */
+.shelf.jlive .shelf-head h2::after {
+  content: ""; display: inline-block; width: 0.5rem; height: 0.5rem; margin-left: 0.625rem; vertical-align: middle; border-radius: 50%;
+  background: #4cd964; box-shadow: 0 0 0.625rem #4cd964; animation: jlive 1.2s ease-in-out infinite alternate;
+}
+@keyframes jlive { from { opacity: 0.35; } to { opacity: 1; } }
+html.lighter .jcard.jnew { animation-duration: 260ms; }
+
+/* ---- the clock: raised (app.js fitScene sets --cdy) when the row would cover it; and the reflection under the
+   Waterline scene sits exactly under the digits (it used to be nudged 5px to the side) ---- */
+.theme-night .scene .gclock { margin-top: calc(var(--cdy, 0px) * -1); }
+.s-water .gclock.under { transform: none; }
+
+/* ---- the weather panel (weather.js) ---- */
+#wx-panel { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99997; color: #fff; font-family: inherit; overflow: hidden; }
+#wx-panel.wx-day { background: linear-gradient(180deg, #1d4a8f 0%, #16315f 55%, #0f1f3d 100%); }
+#wx-panel.wx-night { background: linear-gradient(180deg, #0e1730 0%, #0a1024 60%, #070b18 100%); }
+#wx-panel svg { display: block; width: 100%; height: 100%; }
+#wx-panel .wx-msg { position: absolute; top: 45%; left: 0; right: 0; text-align: center; font-size: 2rem; opacity: 0.8; }
+#wx-panel .wx-grid { display: grid; grid-template-columns: 1fr 32rem; grid-template-rows: 1fr auto; gap: 2rem 4rem; height: 100%; box-sizing: border-box; padding: 4rem 5rem 3.5rem; }
+#wx-panel h1 { margin: 0; font-size: 3.5rem; line-height: 4rem; font-weight: 700; }
+#wx-panel .wx-main p { margin: 0.25rem 0 0; font-size: 1.5rem; opacity: 0.75; text-transform: capitalize; }
+#wx-panel .wx-now { display: flex; align-items: center; margin-top: 2rem; }
+#wx-panel .wx-now i { width: 9rem; height: 9rem; margin-right: 2rem; }
+#wx-panel .wx-now b { font-size: 9rem; line-height: 9rem; font-weight: 300; letter-spacing: -0.03em; }
+#wx-panel .wx-now span { margin-left: 2rem; font-size: 2.5rem; font-weight: 500; opacity: 0.9; }
+#wx-panel .wx-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2.25rem; max-width: 50rem; }
+#wx-panel .wx-s { padding: 1rem 1.25rem; border-radius: 1rem; background: rgba(255, 255, 255, 0.1); }
+#wx-panel .wx-s small { display: block; font-size: 1.125rem; opacity: 0.7; }
+#wx-panel .wx-s b { display: block; margin-top: 0.25rem; font-size: 2rem; font-weight: 600; }
+#wx-panel h3 { margin: 0 0 0.75rem; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.7; }
+#wx-panel .wx-side { padding: 1.25rem 1.5rem; border-radius: 1.25rem; background: rgba(255, 255, 255, 0.08); }
+#wx-panel .wx-d { display: flex; align-items: center; height: 3.5rem; font-size: 1.5rem; }
+#wx-panel .wx-d > span:first-child { width: 4.75rem; font-weight: 600; text-transform: capitalize; }
+#wx-panel .wx-d i { flex: none; width: 2.25rem; height: 2.25rem; margin-right: 0.5rem; }
+#wx-panel .wx-d small { width: 3.25rem; font-size: 1.125rem; color: #8fc7ff; }
+#wx-panel .wx-d em { width: 3rem; font-style: normal; text-align: right; opacity: 0.7; }
+#wx-panel .wx-d b { width: 3.25rem; font-weight: 600; text-align: right; }
+#wx-panel .wx-bar { position: relative; flex: 1; height: 0.375rem; margin: 0 0.75rem; border-radius: 0.1875rem; background: rgba(255, 255, 255, 0.18); }
+#wx-panel .wx-bar u { position: absolute; top: 0; bottom: 0; border-radius: 0.1875rem; background: linear-gradient(90deg, #6dd5ff, #ffb347); }
+#wx-panel .wx-hours { grid-column: 1 / 3; padding: 1.25rem 1.5rem 1rem; border-radius: 1.25rem; background: rgba(255, 255, 255, 0.08); }
+#wx-panel .wx-hours > div { display: flex; justify-content: space-between; }
+#wx-panel .wx-h { width: 7rem; text-align: center; }
+#wx-panel .wx-h span { display: block; font-size: 1.25rem; opacity: 0.75; }
+#wx-panel .wx-h i { display: block; width: 3rem; height: 3rem; margin: 0.375rem auto; }
+#wx-panel .wx-h b { display: block; font-size: 1.75rem; font-weight: 600; }
+#wx-panel .wx-h small { display: block; height: 1.375rem; font-size: 1.125rem; color: #8fc7ff; }
+#wx-panel .wx-hint { position: absolute; right: 5rem; bottom: 1rem; font-size: 1rem; opacity: 0.5; }
+
+/* ---- the widgets page below the dock (panel.js) and the Apps menu: opening a menu fades the top buttons, the row and the
+   dock out, exactly like "hide rows when idle", and dims what is left (the photo, the date and the clock), as Home settings does ---- */
+html.cp-open .top-left, html.cp-open .quick, html.cp-open .quick-note, html.cp-open .np, html.cp-open .shelf, html.cp-open .apps, html.cp-open #cp-hint {
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 400ms ease, visibility 0s linear 400ms;
+}
+#cp {
+  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0; transition: opacity 460ms ease;
+  color: #fff; font-family: "Inter", system-ui, sans-serif; font-weight: 450; -webkit-font-smoothing: antialiased;
+}
+html.cp-open #cp { opacity: 1; }
+html.cp-apps-open #cp .cp-grid, html.cp-apps-open #cp .cp-hint { opacity: 0; visibility: hidden; }
+#cp .cp-grid, #cp .cp-hint { transition: opacity 260ms ease; }
+/* the dimming a menu puts over the home, as Home settings does (a dark layer, and a blur where the TV can afford it) */
+#cp { background: rgba(10, 8, 12, 0.7); }
+html:not(.lighter) #cp { -webkit-backdrop-filter: blur(1.5rem) saturate(140%); backdrop-filter: blur(1.5rem) saturate(140%); }
+#cp .cp-grid {
+  display: grid; grid-template-columns: 35rem 1fr; grid-template-rows: auto auto; gap: 1.5rem 3rem; align-content: end; box-sizing: border-box;
+  height: 100%; padding: 0 5rem 3.25rem; transform: translateY(10rem); transition: transform 560ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 260ms ease;
+}
+html.cp-open #cp .cp-grid { transform: none; }
+#cp .cp-card {
+  box-sizing: border-box; border: 0.1875rem solid rgba(255, 255, 255, 0.10); border-radius: 1.5rem; background: rgba(18, 24, 40, 0.62);
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.3); transition: transform 200ms, background 200ms;
+}
+html:not(.lighter) #cp .cp-card { -webkit-backdrop-filter: blur(1.5rem) saturate(160%); backdrop-filter: blur(1.5rem) saturate(160%); }
+#cp .cp-card.on { border-color: #fff; background: rgba(30, 40, 64, 0.8); transform: scale(1.04); }
+#cp .cp-wx { grid-row: 1 / 3; padding: 1.5rem 2rem; }
+#cp .cp-wxbody { font-size: 1.5rem; opacity: 0.8; }
+#cp .cp-wx h3 { margin: 0; font-size: 1.625rem; font-weight: 600; }
+#cp .cpw-now { display: flex; align-items: center; margin-top: 0.5rem; }
+#cp .cpw-now i { width: 5.5rem; height: 5.5rem; margin-right: 1rem; }
+#cp .cpw-now b { font-size: 5.5rem; line-height: 5.5rem; font-weight: 300; letter-spacing: -0.03em; }
+#cp .cp-wx p { margin: 0.5rem 0 0; font-size: 1.5rem; opacity: 0.85; }
+#cp .cpw-h { display: flex; justify-content: space-between; margin-top: 1.25rem; padding-top: 1rem; border-top: 0.0625rem solid rgba(255, 255, 255, 0.16); }
+#cp .cpw-h > div { width: 6rem; text-align: center; }
+#cp .cpw-h span { display: block; font-size: 1.0625rem; opacity: 0.7; }
+#cp .cpw-h i { display: block; width: 2.5rem; height: 2.5rem; margin: 0.25rem auto; }
+#cp .cpw-h b { font-size: 1.5rem; font-weight: 600; }
+#cp svg { display: block; width: 100%; height: 100%; }
+#cp .cp-sec h3 { margin: 0 0 0.625rem; font-size: 1.125rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85; text-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.55); }
+#cp .cp-row { display: flex; }
+#cp .cp-btn { display: flex; flex: none; flex-direction: column; align-items: center; justify-content: center; width: 11.5rem; height: 8.75rem; margin-right: 1.25rem; }
+#cp .cp-btn i { width: 3rem; height: 3rem; margin-bottom: 0.625rem; }
+#cp .cp-btn b { font-size: 1.25rem; font-weight: 600; text-align: center; line-height: 1.4rem; }
+#cp .cp-hint { position: absolute; right: 5rem; bottom: 0.875rem; font-size: 1rem; opacity: 0.8; text-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.6); }
+
+/* every app on the TV, A to Z: the dock grown into a full list (it uses the home's own .grid and .tile.app styles) */
+#cp-apps {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99995; box-sizing: border-box; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2.875rem; color: #fff;
+  font-family: "Inter", system-ui, sans-serif; font-weight: 450; -webkit-font-smoothing: antialiased;
+  animation: cpaFade 320ms ease both;
+}
+@keyframes cpaFade { from { opacity: 0; } to { opacity: 1; } }
+#cp-apps .cpa-wrap { animation: cpaRise 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes cpaRise { from { opacity: 0; transform: translateY(2.5rem); } to { opacity: 1; transform: none; } }
+#cp-apps .cpa-head { display: flex; align-items: center; margin: 0 0 1.25rem 2.625rem; }
+#cp-apps h2 { margin: 0; font-size: 1.875rem; line-height: 2.25rem; font-weight: 600; color: rgba(255, 255, 255, 0.86); text-shadow: 0 0.125rem 1rem rgba(0, 0, 0, 0.4); }
+#cp-apps .cpa-count { margin-left: 1rem; padding: 0 0.75rem; border-radius: 1rem; font-size: 1.125rem; line-height: 1.75rem; background: rgba(255, 255, 255, 0.16); }
+#cp-apps .cpa-az { margin-left: auto; margin-right: 2.625rem; font-size: 1.0625rem; letter-spacing: 0.35em; white-space: nowrap; }
+#cp-apps .cpa-az b { font-weight: 600; opacity: 0.22; }
+#cp-apps .cpa-az b.has { opacity: 0.6; }
+#cp-apps .cpa-az b.now { opacity: 1; color: #fff; text-shadow: 0 0 0.875rem rgba(255, 255, 255, 0.85); }
+/* the panel is the home's .grid (glass, rounded); here it holds ten columns and scrolls with the focus */
+#cp-apps .cpa-grid {
+  position: relative; display: grid; grid-template-columns: repeat(10, 7rem); grid-auto-rows: 7rem; height: 23rem; overflow: hidden; box-sizing: border-box;
+  padding: 2.25rem 3.375rem 3.75rem; scroll-behavior: smooth; background: rgba(20, 26, 42, 0.74);
+}
+#cp-apps .cpa-hint { display: none; }
+html.lighter #cp-apps, html.lighter #cp-apps .cpa-wrap { animation-duration: 200ms; }
+
+/* the arrow under the dock: there is a page below (shown by app.js while Down opens it) */
+#cp-hint { position: fixed; left: 50%; bottom: 0.375rem; z-index: 40; width: 2.25rem; height: 1.375rem; margin-left: -1.125rem; color: rgba(255, 255, 255, 0.85); opacity: 0; pointer-events: none; transition: opacity 250ms; filter: drop-shadow(0 0.125rem 0.375rem rgba(0, 0, 0, 0.6)); }
+#cp-hint.on { opacity: 1; animation: cpbob 1.5s ease-in-out infinite; }
+html.cp-open #cp-hint { opacity: 0; animation: none; }
+#cp-hint svg { display: block; width: 100%; height: 100%; }
+@keyframes cpbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(0.25rem); } }
+html.lighter main.home, html.lighter #cp, html.lighter #cp .cp-grid { transition-duration: 400ms; }
+
+/* the date line sits just above the clock, so it rises with it (app.js fitScene, showScene) */
+.theme-night .date { margin-top: calc(var(--cdy-r, 0px) * -1); transition: opacity 600ms ease-in-out, margin-top 300ms ease; }
