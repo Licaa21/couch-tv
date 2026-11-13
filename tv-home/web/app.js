@@ -2066,6 +2066,9 @@
     var track = $("shelf");
     data.shows = KW_ON ? (data.showsBy[who] || []).slice(0, KEEP_MAX) : [];
     var anyone = KW_ON && PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
+    // a Jellyfin row (the Samsung app's moonfin.js): posters in a tighter row, see .jcard in tizen.css
+    var jrow = NIGHT && data.shows.length > 0 && !!data.shows[0].jf;
+    $("shelf-section").classList.toggle("jrow", jrow);
     // nobody has anything on the go: no empty box, the photo has the space (unless Now playing
     // is up at night). The people switcher stays: with nothing yet (Netflix tells Android nothing on
     // some TVs, issue #23) it is the only way to say who is watching before anything is played.
@@ -2076,6 +2079,20 @@
       var name = PEOPLE[whoIndex()].name;
       track.innerHTML = '<p class="shelf-none">' + esc(peopleCount() < 2 ? t("nothing_yet") : t("nothing_for", { name: name })) + "</p>";
       shelfEls = [];
+      return;
+    }
+    if (jrow) {
+      // Moonfin's look: a poster per title with its name underneath; the focused one opens out into its backdrop
+      track.innerHTML = data.shows.map(function (it) {
+        var pic = slim(it.poster || it.backdrop), wide = slim(it.backdrop || it.poster);
+        var sub = it.season && it.episode ? "S" + it.season + " E" + it.episode + (it.episode_title ? "  ·  " + it.episode_title : "") : "";
+        return '<div class="tile jcard"><div class="jface">' +
+          (pic ? '<img class="jp" src="' + esc(pic) + '" alt="" decoding="async">' : "") +
+          (wide ? '<img class="jb" src="' + esc(wide) + '" alt="" decoding="async">' : "") +
+          (it.progress ? '<span class="jbar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "") +
+          '</div><div class="jcap"><b>' + esc(it.title) + "</b><i>" + esc(sub) + "</i></div></div>";
+      }).join("");
+      shelfEls = Array.prototype.slice.call(track.children);
       return;
     }
     if (NIGHT) {
@@ -2608,6 +2625,16 @@
     var track = $("shelf");
     var el = shelfEls[s];
     if (!el) { track.style.transform = ""; return; }
+    if ($("shelf-section").classList.contains("jrow")) {
+      // the Jellyfin row: the focused card sits at the left edge and the posters run on to its right.
+      // Sizes are .jcard's in tizen.css (7.25rem poster, 19rem focused, 1.375rem apart); the width
+      // is worked out from them because the cards are still opening out when this runs.
+      var rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      var n = shelfEls.length, room = track.parentNode.clientWidth - 3 * rem;
+      var shift = Math.min(s * 8.625 * rem, Math.max(0, (n * 7.25 + (n - 1) * 1.375 + 11.75) * rem - room));
+      track.style.transform = "translateX(" + (document.documentElement.dir === "rtl" ? shift : -shift) + "px)";
+      return;
+    }
     var step = el.offsetWidth + parseFloat(getComputedStyle(track).columnGap || 0);
     // how many cards fit: three glass cards on the Night look, about five posters on Classic
     var fit = Math.max(1, Math.floor((track.parentNode.clientWidth + step - el.offsetWidth) / step));

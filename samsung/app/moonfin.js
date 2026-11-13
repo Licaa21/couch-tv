@@ -67,6 +67,14 @@
     return cfg.server + "/Items/" + id + "/Images/" + type + "?fillWidth=640&quality=80&tag=" + tag;
   }
 
+  // The tall cover: a film's own, a show's for its episodes. Cards show it until they are focused.
+  function poster(cfg, it) {
+    var id = it.Id, tag;
+    if (it.Type === "Episode") { id = it.SeriesId; tag = it.SeriesPrimaryImageTag; }
+    else tag = it.ImageTags && it.ImageTags.Primary;
+    return tag && id ? cfg.server + "/Items/" + id + "/Images/Primary?fillHeight=320&quality=85&tag=" + tag : null;
+  }
+
   // One Jellyfin item as a Keep watching card. "jf" is what Moonfin's own Smart Hub tiles carry.
   function card(cfg, it, app) {
     var ep = it.Type === "Episode";
@@ -78,7 +86,7 @@
       episode_title: ep ? it.Name : null,
       season: ep ? it.ParentIndexNumber : null, episode: ep ? it.IndexNumber : null,
       progress: it.UserData && it.UserData.PlayedPercentage ? it.UserData.PlayedPercentage / 100 : 0,
-      backdrop: image(cfg, it)
+      backdrop: image(cfg, it), poster: poster(cfg, it)
     };
   }
 
