@@ -290,3 +290,8 @@ html.idle-photo .shelf, html.idle-photo .apps { visibility: visible; opacity: 0.
 
 /* the weather screen opened from the widgets page lies over it: the page is not drawn meanwhile */
 html.wx-open #cp { opacity: 0.01; }
+
+/* The clock keeps a layer of its own. Without it, each lift (a menu opening or closing) made the TV split the scene into layers for
+   the length of the move and merge them again after it: the photo, the cut-out in front of the clock and the glass digits were all
+   drawn again twice, which is seconds on this TV. */
+.theme-night .scene .gclock, .theme-night .date { will-change: transform; }
