@@ -39,10 +39,12 @@
   // The launcher's saved copy of this page, opened when the computer is off (or when there is no
   // computer at all): scenes, clock, weather straight from Open-Meteo and the apps in the saved
   // order; nothing that needs the bridge.
-  var OFFLINE = STANDALONE || /[?&]offline=1/.test(Q);
+  // The Samsung app with no bridge is always the TV's own home: a TV can drop the "?offline=1" from the app's start page.
+  var NOBRIDGE = !!window.COUCH_TIZEN && !window.COUCH_TIZEN.bridge;
+  var OFFLINE = STANDALONE || NOBRIDGE || /[?&]offline=1/.test(Q);
   // No computer at all (option A): the launcher's built-in copy is the home, so there is no
   // "computer is off" note to show.
-  var ALONE = STANDALONE || (OFFLINE && /[?&]alone=1/.test(Q));
+  var ALONE = STANDALONE || NOBRIDGE || (OFFLINE && /[?&]alone=1/.test(Q));
   if (OFFLINE) document.documentElement.classList.add("offline");
   var CACHE_KEY = "tvhome.cache.v2";
   // Every word on screen comes from i18n.js, in the language picked in Home settings.
@@ -2235,12 +2237,15 @@
     if (!window.MoonfinTV) return;
     var cs = el.querySelectorAll(".gclock"), c = cs[0], f = c && c.querySelector(".fill"), q;
     if (!f) return;
-    for (q = 0; q < cs.length; q++) cs[q].style.fontSize = "";   // measured as the scene draws it
-    el.style.setProperty("--cdy", "0px");
+    for (q = 0; q < cs.length; q++) cs[q].style.fontSize = "";   // (an older build made it smaller; it no longer does)
+    // Where the digits sit when not raised: measured as they are now, less the lift they have (or are in the middle of making),
+    // so the move from one place to the next is a transition and not a jump.
+    var lift0 = 0;
+    try { var tf = getComputedStyle(c).transform; lift0 = tf && tf !== "none" ? new WebKitCSSMatrix(tf).m42 : 0; } catch (e) {}
     var m = document.createElement("i");
     m.style.cssText = "display:inline-block;width:0;height:0";
     f.appendChild(m);
-    var base = m.getBoundingClientRect().bottom;
+    var base = m.getBoundingClientRect().bottom - lift0;
     f.removeChild(m);
     var fs = parseFloat(getComputedStyle(c).fontSize) || 0, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") ? 100000 : sec.getBoundingClientRect().top;
@@ -2254,19 +2259,13 @@
       rowTop = wmain ? Math.min(fitRowTop, wmain.getBoundingClientRect().top) : fitRowTop;
     } else fitRowTop = rowTop;
     var target = rowTop - 0.6 * rem, need = base + 0.01 * fs - target;   // need: how far the digits reach into the row
-    var dy = 0, k = 1;
+    var dy = 0;
     if (need > 0) {
       var room = base - DIGIT_EM * fs - 9 * rem;   // how far they can rise before the date line
-      dy = Math.min(need, Math.max(0, room));
-      if (need - dy > 1) {
-        // still too low (a big clock, a tall row): smaller too, about the top of its box, by what is missing
-        var top = c.getBoundingClientRect().top - dy, bottom = base + 0.01 * fs - dy;
-        k = Math.max(0.6, (target - top) / (bottom - top));
-      }
+      dy = Math.min(need, Math.max(0, room));   // never smaller: what still overlaps stays behind the cards, as the clock always is
     }
     el.style.setProperty("--cdy", Math.round(dy) + "px");
     if (el.classList.contains("on")) document.documentElement.style.setProperty("--cdy-r", Math.round(dy) + "px");   // the date line rises with it
-    if (k < 1) for (q = 0; q < cs.length; q++) cs[q].style.fontSize = (fs * k).toFixed(1) + "px";
   }
   // all the scenes again: the glass in the digits is cut from where the clock now is
   function fitClocks() {
@@ -2990,7 +2989,7 @@
         else if (peopleOn() || hasQuick()) {
           // the picture is top left and the buttons top right: Up goes to the one above (the Samsung app; elsewhere the picture first)
           var gb = gridEls[g] ? gridEls[g].getBoundingClientRect() : null;
-          if (window.MoonfinTV && hasQuick() && gb && gb.left + gb.width / 2 > window.innerWidth / 2) { zone = "quick"; qi = Math.max(0, quickVisible().length - 1); }
+          if (window.MoonfinTV && hasQuick() && gb && gb.left + gb.width / 2 > window.innerWidth / 2) { zone = "quick"; qi = Math.max(0, quickVisible().indexOf("input")); }   // the source button
           else if (peopleOn()) toPeople();
           else { zone = "quick"; qi = 0; }   // offline the sleep and picture buttons are hidden
         }

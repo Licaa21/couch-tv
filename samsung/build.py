@@ -104,6 +104,13 @@ def main():
     # Lighter home (no blur, no soft shadows, a still photo, smaller pictures) is on unless config.json says
     # otherwise: a Samsung's browser is slow, and it can be switched off in Home settings, Look
     pub.setdefault("home", {}).setdefault("lighter", True)
+    # the 1080 pictures even on a 4K screen: the 4K copies are four times the pixels to decode while the home starts
+    pub["home"].setdefault("hi_res", False)
+    if pub["home"]["hi_res"] is False:   # and they are not packaged either
+        for dirpath, _dirs, names in os.walk(os.path.join(stage, "backgrounds")):
+            for n in names:
+                if "@2x" in n:
+                    os.remove(os.path.join(dirpath, n))
     with open(os.path.join(stage, "config.js"), "w") as f:
         f.write("(function () {\n  var t = null;\n"
                 "  try { t = localStorage.getItem(\"couch.configjs\"); } catch (e) {}\n"

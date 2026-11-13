@@ -130,15 +130,15 @@ html.lighter .jcard.jnew { animation-duration: 260ms; }
 
 /* ---- the clock: raised (app.js fitScene sets --cdy) when the row would cover it; and the reflection under the
    Waterline scene sits exactly under the digits (it used to be nudged 5px to the side) ---- */
-.theme-night .scene .gclock { margin-top: calc(var(--cdy, 0px) * -1); }
-.s-water .gclock.under { transform: none; }
+.theme-night .scene .gclock { transform: translateY(calc(var(--cdy, 0px) * -1)); transition: transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.s-water .gclock.under { transform: translateY(calc(var(--cdy, 0px) * -1)); }
 
 /* ---- the weather panel (weather.js) ---- */
 #wx-panel { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99997; color: #fff; font-family: inherit; overflow: hidden; }
 /* the weather screen is see-through: the clock and the photo stay behind it, dimmed, and the home steps aside as it does for the widgets page */
 #wx-panel.wx-day, #wx-panel.wx-night { background: rgba(10, 8, 12, 0.55); }
 html.wx-open .date, html.wx-open .top-left, html.wx-open .quick, html.wx-open .quick-note, html.wx-open .np, html.wx-open .shelf, html.wx-open .apps, html.wx-open #cp-hint {
-  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 400ms ease, visibility 0s linear 400ms;
+  visibility: hidden; pointer-events: none;
 }
 #wx-panel svg { display: block; width: 100%; height: 100%; }
 #wx-panel .wx-msg { position: absolute; top: 45%; left: 0; right: 0; text-align: center; font-size: 2rem; opacity: 0.8; }
@@ -175,23 +175,21 @@ html.wx-open .date, html.wx-open .top-left, html.wx-open .quick, html.wx-open .q
 /* ---- the widgets page below the dock (panel.js) and the Apps menu: opening a menu fades the top buttons, the row and the
    dock out, exactly like "hide rows when idle", and dims what is left (the photo, the date and the clock), as Home settings does ---- */
 html.cp-open .top-left, html.cp-open .quick, html.cp-open .quick-note, html.cp-open .np, html.cp-open .shelf, html.cp-open .apps, html.cp-open #cp-hint {
-  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 250ms ease, visibility 0s linear 250ms;
+  visibility: hidden; pointer-events: none; transition: visibility 0s linear 160ms;   /* only gone once the overlay has covered them */
 }
 #cp {
-  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0; transition: opacity 250ms ease;
+  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0; transition: opacity 160ms ease;
   color: #fff; font-family: "Inter", system-ui, sans-serif; font-weight: 450; -webkit-font-smoothing: antialiased;
 }
 html.cp-open #cp { opacity: 1; }
 html.cp-apps-open #cp .cp-grid, html.cp-apps-open #cp .cp-hint { opacity: 0; visibility: hidden; }
-#cp .cp-grid, #cp .cp-hint { transition: opacity 260ms ease; }
 /* the dimming a menu puts over the home, as Home settings does (a dark layer, and a blur where the TV can afford it) */
 #cp { background: rgba(10, 8, 12, 0.7); }
 html:not(.lighter) #cp { -webkit-backdrop-filter: blur(1.5rem) saturate(140%); backdrop-filter: blur(1.5rem) saturate(140%); }
 #cp .cp-grid {
   display: grid; grid-template-columns: 35rem 1fr; grid-template-rows: auto auto; gap: 1.5rem 3rem; align-content: end; box-sizing: border-box;
-  height: 100%; padding: 0 5rem 3.25rem; transform: translateY(4rem); transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 200ms ease;
+  height: 100%; padding: 0 5rem 3.25rem; 
 }
-html.cp-open #cp .cp-grid { transform: none; }
 #cp .cp-card {
   box-sizing: border-box; border: 0.1875rem solid rgba(255, 255, 255, 0.08); border-radius: 1.5rem; background: rgba(255, 255, 255, 0.10);
 }   /* no big shadow, no scaling and no transition: they made moving between the buttons stutter on the TV */
@@ -221,11 +219,9 @@ html:not(.lighter) #cp .cp-card { -webkit-backdrop-filter: blur(1.5rem) saturate
 #cp-apps {
   position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99995; box-sizing: border-box; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2.875rem; color: #fff;
   font-family: "Inter", system-ui, sans-serif; font-weight: 450; -webkit-font-smoothing: antialiased;
-  animation: cpaFade 320ms ease both;
+  animation: cpaFade 160ms ease both;
 }
 @keyframes cpaFade { from { opacity: 0; } to { opacity: 1; } }
-#cp-apps .cpa-wrap { animation: cpaRise 460ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-@keyframes cpaRise { from { opacity: 0; transform: translateY(2.5rem); } to { opacity: 1; transform: none; } }
 #cp-apps .cpa-head { display: flex; align-items: center; margin: 0 0 1.25rem 2.625rem; }
 #cp-apps h2 { margin: 0; font-size: 1.875rem; line-height: 2.25rem; font-weight: 600; color: rgba(255, 255, 255, 0.86); text-shadow: 0 0.125rem 1rem rgba(0, 0, 0, 0.4); }
 #cp-apps .cpa-count { margin-left: 1rem; padding: 0 0.75rem; border-radius: 1rem; font-size: 1.125rem; line-height: 1.75rem; background: rgba(255, 255, 255, 0.16); }
@@ -239,7 +235,6 @@ html:not(.lighter) #cp .cp-card { -webkit-backdrop-filter: blur(1.5rem) saturate
   padding: 2.25rem 3.375rem 3.75rem; scroll-behavior: smooth; background: rgba(34, 34, 38, 0.66);
 }
 #cp-apps .cpa-hint { display: none; }
-html.lighter #cp-apps, html.lighter #cp-apps .cpa-wrap { animation-duration: 200ms; }
 
 /* the arrow under the dock: there is a page below (shown by app.js while Down opens it) */
 #cp-hint { position: fixed; left: 50%; bottom: 0.375rem; z-index: 40; width: 2.25rem; height: 1.375rem; margin-left: -1.125rem; color: rgba(255, 255, 255, 0.85); opacity: 0; pointer-events: none; transition: opacity 250ms; filter: drop-shadow(0 0.125rem 0.375rem rgba(0, 0, 0, 0.6)); }
@@ -247,10 +242,9 @@ html.lighter #cp-apps, html.lighter #cp-apps .cpa-wrap { animation-duration: 200
 html.cp-open #cp-hint { opacity: 0; animation: none; }
 #cp-hint svg { display: block; width: 100%; height: 100%; }
 @keyframes cpbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(0.25rem); } }
-html.lighter main.home, html.lighter #cp, html.lighter #cp .cp-grid { transition-duration: 400ms; }
 
 /* the date line sits just above the clock, so it rises with it (app.js fitScene, showScene) */
-.theme-night .date { margin-top: calc(var(--cdy-r, 0px) * -1); transition: opacity 600ms ease-in-out, margin-top 300ms ease; }
+.theme-night .date { transform: translateY(calc(var(--cdy-r, 0px) * -1)); transition: opacity 600ms ease-in-out, transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 /* A 2018 TV (Tizen 4.0) stops clipping a tile's picture to the face's rounded corners while the
    tile scales or fades, so the logo shows square for about a second. Rounding the picture and the
    glint themselves keeps the corners; a mask on the face would also cut its shadow. */
@@ -268,8 +262,15 @@ html.lighter main.home, html.lighter #cp, html.lighter #cp .cp-grid { transition
    and shadow change at once, and the tile keeps its own layer. */
 .theme-night .app:not(.focus) .face img { filter: none; }
 .app .face { transition: none; }
-.tile.app { will-change: transform; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 
 /* Home settings: the focused row no longer scales, casts a big shadow or fades, which made a held key stutter. */
 .srow { transition: none; }
 .srow.focus { transform: none; box-shadow: none; }
+
+/* Readable on a bright photo (golden hour, dawn): the row's heading, the titles and the notes get a dark halo of their own. */
+#shelf-title, .shelf-none, .jcap b, .jcap i, .app .label { text-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.75), 0 0.0625rem 0.25rem rgba(0, 0, 0, 0.85), 0 0.125rem 1.25rem rgba(0, 0, 0, 0.55); }
+#shelf-title, .shelf-none { font-weight: 650; color: #fff; }
+
+/* Home settings and the other menus just appear: no settling animation, no blur behind them. */
+.settings.on .set-side, .settings.on .set-main, .gear-pop.on, .app-pop.on, .sleep-menu.on { animation: none !important; }
+.settings { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(10, 8, 12, 0.94); }

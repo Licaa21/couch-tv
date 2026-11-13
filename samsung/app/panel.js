@@ -16,17 +16,12 @@
     apps: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
     home: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
     gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/>',
-    moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>'
   };
   function svg(name) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + ICON[name] + "</svg>"; }
   function card(k, icon, label) { return '<div class="cp-card cp-btn" data-k="' + k + '"><i>' + svg(icon) + "</i><b>" + esc(label) + "</b></div>"; }
 
-  function moonfin() {
-    try { return JSON.parse(window.TVOS.apps()).filter(function (a) { return /^moonfin$/i.test(a.label || ""); })[0] || null; } catch (e) { return null; }
-  }
 
   function build() {
-    var moon = moonfin();
     el = document.createElement("div");
     el.id = "cp";
     el.innerHTML = '<div class="cp-grid">' +
@@ -34,12 +29,12 @@
       '<div class="cp-sec"><h3>' + esc(t("cp_inputs")) + '</h3><div class="cp-row">' +
         card("tv", "tv", t("tv_live")) + [1, 2, 3, 4].map(function (n) { return card("h" + n, "hdmi", "HDMI " + n); }).join("") + "</div></div>" +
       '<div class="cp-sec"><h3>' + esc(t("cp_shortcuts")) + '</h3><div class="cp-row">' +
-        card("apps", "apps", t("apps")) + card("hs", "home", t("gear_home")) + card("tvs", "gear", t("gear_tv")) + (moon ? card("moon", "moon", "Moonfin") : "") + "</div></div>" +
+        card("apps", "apps", t("apps")) + card("hs", "home", t("gear_home")) + card("tvs", "gear", t("gear_tv")) + "</div></div>" +
       '</div><small class="cp-hint">' + esc(t("cp_hint")) + "</small>";
     root.appendChild(el);
     var by = {};
     Array.prototype.forEach.call(el.querySelectorAll("[data-k]"), function (n) { by[n.getAttribute("data-k")] = n; });
-    rows = [[by.wx, by.tv, by.h1, by.h2, by.h3, by.h4], [by.wx, by.apps, by.hs, by.tvs].concat(moon ? [by.moon] : [])];
+    rows = [[by.wx, by.tv, by.h1, by.h2, by.h3, by.h4], [by.wx, by.apps, by.hs, by.tvs]];
   }
 
   function paint() {
@@ -63,7 +58,6 @@
     else if (k === "apps") openApps();
     else if (k === "hs") close(function () { if (window.tv && window.tv.homeSettings) window.tv.homeSettings(); });
     else if (k === "tvs") close(function () { window.TVOS.launch("com.android.tv.settings"); });
-    else if (k === "moon") { var m = moonfin(); close(function () { if (m) window.TVOS.launch(m.package); }); }
   }
 
   // ---- every app on the TV, A to Z
