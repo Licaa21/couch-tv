@@ -148,8 +148,6 @@
     ri = 0; ci = 1;
     paint();
     setTimeout(function () { if (isOpen) loadWeather(); }, 220);   // after the page is up, not in the key press
-    el.style.display = "block";
-    void el.offsetHeight;   // laid out below the screen first, so it rises
     root.classList.add("cp-open");
     document.addEventListener("keydown", keys, true);
     setTimeout(function () { busy = false; if (isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }, 200);   // the clock clears the widgets
@@ -162,11 +160,13 @@
     document.removeEventListener("keydown", keys, true);
     setTimeout(function () {
       busy = false;
-      if (!isOpen && el) el.style.display = "none";
       if (!isOpen) { wake(); if (window.tv && window.tv.fitClocks) window.tv.fitClocks(); }   // back above the row, once the home is in place
       if (cb) cb();
     }, 200);
   }
+
+  // Built and drawn (unseen) a few seconds after the home is up, so the first Down has nothing to build or draw.
+  setTimeout(function () { try { if (!el) { build(); loadWeather(); } } catch (e) {} }, 5000);
 
   // the arrow under the dock: the page is below
   var hint = document.createElement("div");

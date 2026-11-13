@@ -138,7 +138,7 @@ html.lighter .jcard.jnew { animation-duration: 260ms; }
 /* the weather screen is see-through: the clock and the photo stay behind it, dimmed, and the home steps aside as it does for the widgets page */
 #wx-panel.wx-day, #wx-panel.wx-night { background: rgba(10, 8, 12, 0.55); }
 html.wx-open .date, html.wx-open .top-left, html.wx-open .quick, html.wx-open .quick-note, html.wx-open .np, html.wx-open .shelf, html.wx-open .apps, html.wx-open #cp-hint {
-  opacity: 0; pointer-events: none;
+  opacity: 0.01; pointer-events: none;   /* not 0: see the note on kept layers at the end */
 }
 html.wx-open .date { transition: none; }
 #wx-panel svg { display: block; width: 100%; height: 100%; }
@@ -176,13 +176,13 @@ html.wx-open .date { transition: none; }
 /* ---- the widgets page below the dock (panel.js) and the Apps menu: opening a menu fades the top buttons, the row and the
    dock out, exactly like "hide rows when idle", and dims what is left (the photo, the date and the clock), as Home settings does ---- */
 html.cp-open .top-left, html.cp-open .quick, html.cp-open .quick-note, html.cp-open .np, html.cp-open .shelf, html.cp-open .apps, html.cp-open #cp-hint {
-  opacity: 0; pointer-events: none;
+  opacity: 0.01; pointer-events: none;   /* not 0: see the note on kept layers at the end */
 }
 #cp {
-  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0; transition: opacity 160ms ease;
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0.01; pointer-events: none; will-change: opacity; transition: opacity 160ms ease;
   color: #fff; font-family: "Inter", system-ui, sans-serif; font-weight: 450; -webkit-font-smoothing: antialiased;
 }
-html.cp-open #cp { opacity: 1; }
+html.cp-open #cp { opacity: 1; pointer-events: auto; }
 html.cp-apps-open #cp .cp-grid, html.cp-apps-open #cp .cp-hint { opacity: 0; visibility: hidden; }
 /* the dimming a menu puts over the home, as Home settings does (a dark layer, and a blur where the TV can afford it) */
 #cp { background: rgba(10, 8, 12, 0.7); }
@@ -279,11 +279,14 @@ html.cp-open #cp-hint { opacity: 0; animation: none; }
 /* Hiding the home for a menu (or for "hide after x seconds") is a change of opacity on layers the TV keeps, never visibility:
    with visibility the row's pictures were thrown away and drawn again each time, which is the lag at every menu. */
 .theme-night .shelf, .theme-night .apps { will-change: opacity; }
-html.idle-photo .shelf, html.idle-photo .apps { visibility: visible; transition: opacity 250ms ease; }
+html.idle-photo .shelf, html.idle-photo .apps { visibility: visible; opacity: 0.01; transition: opacity 250ms ease; }
+/* Kept layers: a layer at opacity 0 is not drawn at all, and a TV short of memory then throws its pictures away and has to draw the
+   row, the dock or the widgets page again when it comes back (seconds of stutter). At 0.01 it cannot be seen and stays drawn. The
+   widgets page is built soon after the home starts and stays in the page for the same reason. */
 
 /* The row started 46px right of its heading on this TV's browser (no flex gap): the stand-in margin replaced the strip's own. */
 .no-flex-gap.theme-night .shelf-row > .np-slot + .shelf-clip { margin-left: -1.5rem; }
 .no-flex-gap.theme-night .shelf-row > .np-slot.on + .shelf-clip { margin-left: -0.125rem; }
 
 /* the weather screen opened from the widgets page lies over it: the page is not drawn meanwhile */
-html.wx-open #cp { opacity: 0; }
+html.wx-open #cp { opacity: 0.01; }
