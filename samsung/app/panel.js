@@ -109,7 +109,9 @@
     box.scrollTop = Math.max(0, want);
   }
   function closeApps() { if (popup && popup.parentNode) popup.parentNode.removeChild(popup); popup = null; root.classList.remove("cp-apps-open"); if (window.tv && window.tv.fitClocks && isOpen) window.tv.fitClocks(); }
+  function wake() { if (window.tv && window.tv.wake) window.tv.wake(); }   // the home's "hide after x seconds" must not take these keys as nobody being here
   function popKeys(e) {
+    wake();
     var k = e.keyCode, n = pop.tiles.length;
     if (k === 10009 || k === 27 || k === 8) closeApps();
     else if (k === 37) pop.i = Math.max(0, pop.i - 1);
@@ -124,6 +126,7 @@
 
   // Runs before the home's own keys: the home must not move behind this page.
   function keys(e) {
+    wake();
     if (popup) { popKeys(e); return; }
     var k = e.keyCode;
     if (k === 10009 || k === 27 || k === 8) close();
@@ -139,6 +142,7 @@
   function open() {
     if (isOpen || busy) return;
     busy = true; isOpen = true;
+    wake();
     if (!el) build();
     ri = 0; ci = 1;
     paint();
@@ -158,7 +162,7 @@
     setTimeout(function () {
       busy = false;
       if (!isOpen && el) el.style.display = "none";
-      if (!isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks();   // back above the row, once the home is in place
+      if (!isOpen) { wake(); if (window.tv && window.tv.fitClocks) window.tv.fitClocks(); }   // back above the row, once the home is in place
       if (cb) cb();
     }, 450);
   }

@@ -274,3 +274,6 @@ html.cp-open #cp-hint { opacity: 0; animation: none; }
 /* Home settings and the other menus just appear: no settling animation, no blur behind them. */
 .settings.on .set-side, .settings.on .set-main, .gear-pop.on, .app-pop.on, .sleep-menu.on { animation: none !important; }
 .settings { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(10, 8, 12, 0.94); }
+
+/* While a menu is up nothing of the row shows, not even the episode name of the focused card (it carries its own visibility). */
+html.cp-open .jcap i, html.wx-open .jcap i, html.cp-open .jcap b, html.wx-open .jcap b { visibility: hidden !important; }

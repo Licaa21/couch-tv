@@ -885,6 +885,7 @@
     });
   }
 
+  var sceneBooted = false;
   function showScene(i) {
     var prev = scene;
     scene = i;
@@ -905,13 +906,16 @@
     }, 600);
     sceneEls[i].classList.add("on");
     if (prev !== i) sceneEls[prev].classList.remove("on");
-    // after the fade, stop drawing the old one and get the next one ready
+    // after the fade, stop drawing the old one and get the next one ready (the first time, once the home has settled: two scenes'
+    // pictures decoded while it starts is what a slow TV feels)
+    var readyAfter = sceneBooted ? 2000 : Math.max(2000, Math.min(9000, SCENE_MS - 3000));
+    sceneBooted = true;
     setTimeout(function () {
       var next = nextFrom(scene);
       sceneEls.forEach(function (el, k) { if (k !== scene && k !== next) el.classList.remove("ready"); });
       readyScene(next);
       sceneVideos(true);   // the old scene's clip stops now it has faded out; this one's starts
-    }, 2000);
+    }, readyAfter);
   }
 
   // Night: the date line sits centred above the clock, between the people switch and the quick
@@ -2232,6 +2236,20 @@
   // squeezed, by just as much as the row reaches into it (as far as the date line allows). The bottom of the
   // digits is found with a zero size marker sitting on the text's baseline.
   var fitRowTop = 100000;
+  function textBox(el) { var g = document.createRange(); g.selectNodeContents(el); return g.getBoundingClientRect(); }
+  // The boxes of what a menu has up (its words and cards), or null when none is.
+  function modalBlocks() {
+    var de = document.documentElement, out = [];
+    function all(sel, text) { Array.prototype.forEach.call(document.querySelectorAll(sel), function (e) { out.push(text ? textBox(e) : e.getBoundingClientRect()); }); }
+    if (de.classList.contains("wx-open")) {
+      all("#wx-panel h1, #wx-panel .wx-main p", true);
+      all("#wx-panel .wx-now > *, #wx-panel .wx-s, #wx-panel .wx-side, #wx-panel .wx-hours");
+    } else if (de.classList.contains("cp-open")) {
+      if (document.getElementById("cp-apps")) { all("#cp-apps .cpa-head > *"); all("#cp-apps .cpa-grid"); }
+      else { all("#cp .cp-card"); all("#cp .cp-sec h3", true); }
+    } else return null;
+    return out;
+  }
   var DIGIT_EM = 0.87;   // how tall the clock font's digits are, in em (Antonio, measured)
   function fitScene(el) {
     if (!window.MoonfinTV) return;
@@ -2249,14 +2267,16 @@
     f.removeChild(m);
     var fs = parseFloat(getComputedStyle(c).fontSize) || 0, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") ? 100000 : sec.getBoundingClientRect().top;
-    if (document.documentElement.classList.contains("cp-open") && !document.documentElement.classList.contains("wx-open")) {   // the widgets page is up: the row has gone, the widgets are in its place
-      var wcard = document.querySelector("#cp .cp-wx");
-      rowTop = wcard ? Math.min(fitRowTop, wcard.getBoundingClientRect().top) : fitRowTop;
-      var ahead = document.querySelector("#cp-apps .cpa-head");   // the Apps list is up: its heading is the top edge
-      if (ahead) rowTop = Math.min(rowTop, ahead.getBoundingClientRect().top);
-    } else if (document.documentElement.classList.contains("wx-open")) {   // the weather screen is up: the clock clears its top
-      var wmain = document.querySelector("#wx-panel .wx-main");
-      rowTop = wmain ? Math.min(fitRowTop, wmain.getBoundingClientRect().top) : fitRowTop;
+    var modal = modalBlocks();
+    if (modal) {
+      // A menu is up (widgets, Apps, weather): the row has gone, and only what actually sits under the digits, sideways as well as
+      // upwards, makes them rise; a scene whose clock clears the menu's text stays where it is.
+      var rg = document.createRange();
+      rg.selectNodeContents(f);
+      var cr = rg.getBoundingClientRect(), pad = 0.5 * rem;
+      rowTop = 100000;
+      var digitsTop = cr.top - lift0;   // only what starts below the top of the digits can be under them
+      modal.forEach(function (r) { if (r.width > 0 && r.right > cr.left - pad && r.left < cr.right + pad && r.top > digitsTop && r.top < rowTop) rowTop = r.top; });
     } else fitRowTop = rowTop;
     var target = rowTop - 0.6 * rem, need = base + 0.01 * fs - target;   // need: how far the digits reach into the row
     var dy = 0;
@@ -3318,12 +3338,34 @@
     zone = "settings";
     if (window.AmbientWeather) window.AmbientWeather.pause();
     SET.col = "secs"; SET.sec = 0; SET.ri = 0; SET.keyFocus = null; SET.sub = null; SET.lift = null; SET.confirm = null; SET.msg = "";
+    try { SET.snap = JSON.stringify(ST); } catch (e) { SET.snap = ""; }
     clearFocus();
     $("settings").classList.add("on");
     document.documentElement.classList.add("setting");
     renderSettings();
   }
-  // Closing starts the page again when anything changed, so the look, scenes and words all agree.
+  // What a change of these needs the page started again for (the look, the scenes, the words, the pictures); everything else
+  // (people, app order, the weather, the clock, the buttons, the row) is applied in place.
+  var RELOAD_KEYS = ["lang", "look", "glass", "glass_amount", "glass_icons", "glass_focus", "scene_order", "scenes_off", "scene_seconds", "sun_sync",
+    "video_url", "video", "clock_style", "lighter", "moving_tiles", "ambient_weather", "ambient_sun_grade", "ambient_music", "smart_idle",
+    "place", "photos", "keep_photo", "keep_photo_pick"];
+  function settingsNeedRestart() {
+    var was = {};
+    try { was = JSON.parse(SET.snap || "{}") || {}; } catch (e) { return true; }
+    return RELOAD_KEYS.some(function (k) { return JSON.stringify(was[k]) !== JSON.stringify(ST[k]); });
+  }
+  function applySettingsInPlace() {
+    readConfig();
+    staticText();
+    if (TV) data.apps = sortApps(nativeApps() || []);
+    renderPeople();
+    render();
+    renderQuick();
+    clock();
+    refreshWeather();
+    fitClocks();
+  }
+  // Closing starts the page again only when something that needs it changed (see RELOAD_KEYS).
   function closeSettings() {
     if (SET.typing) stopTyping();
     if (SET.lift) dropRow();
@@ -3331,7 +3373,11 @@
     document.documentElement.classList.remove("setting");
     zone = "grid";
     if (window.AmbientWeather) window.AmbientWeather.resume();
-    if (SET.dirty) { SET.dirty = false; restart(); return; }
+    if (SET.dirty) {
+      SET.dirty = false;
+      if (settingsNeedRestart()) { restart(); return; }
+      applySettingsInPlace();
+    }
     paintFocus();
     resetIdlePhoto();
   }
@@ -4893,6 +4939,7 @@
     fitClocks: function () { fitClocks(); },
     // the weather place and unit Home settings has, for the Samsung app's weather panel (weather.js)
     clock24: function () { return CLOCK24; },
+    wake: function () { resetIdlePhoto(); resetSmartIdle(); },   // a key the menus took for themselves still counts as someone being here
     keepWatching: function (on) {
       on = !!on;
       if (KW_ON === on) return;

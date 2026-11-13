@@ -138,9 +138,11 @@
     function close() {
       alive = false; document.removeEventListener("keydown", keys, true); if (box.parentNode) box.parentNode.removeChild(box);
       document.documentElement.classList.remove("wx-open");
+      if (window.tv && window.tv.wake) window.tv.wake();   // the dock comes back even if the rows had been hidden while the weather was up
       if (window.tv && window.tv.fitClocks) window.tv.fitClocks();   // the clock goes back where the home has it
     }
     function keys(e) {
+      if (window.tv && window.tv.wake) window.tv.wake();
       if (e.keyCode === 10009 || e.keyCode === 27 || e.keyCode === 13) { e.preventDefault(); close(); }
       e.stopImmediatePropagation();
     }

@@ -277,10 +277,15 @@
     function go() { launchOnce(row, app); }
     try {
       tizen.application.getAppsContext(function (list) {
-        go();
-        // Moonfin already open, or in the background, may only come forward and not read the title, so it is
-        // asked once more when it is in front
-        if ((list || []).some(function (c) { return c.appId === app; })) setTimeout(go, 1800);
+        var running = (list || []).filter(function (c) { return c.appId === app; })[0];
+        if (!running) { go(); return; }
+        // Moonfin already open, or in the background, only comes forward and does not read the title. So it is closed and
+        // started again with the title (a cold start reads it), and where closing it is not allowed, it is asked twice.
+        var once = false;
+        function again() { if (once) return; once = true; go(); setTimeout(go, 1800); }
+        try {
+          tizen.application.kill(running.id, function () { if (once) return; once = true; setTimeout(go, 800); }, again);
+        } catch (e) { again(); }
       }, go);
     } catch (e) { go(); }
     return true;
