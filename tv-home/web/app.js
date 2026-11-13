@@ -2084,12 +2084,13 @@
     var why = M.problem();
     if (why) return why;
     var n = M.count();
-    return n ? t("jf_row_lost", { n: n }) : "";   // titles came from the server and none is drawn: say so
+    return n ? t("jf_row_lost", { n: n }) + (jfDiag ? " [" + jfDiag + "]" : "") : "";   // titles came from the server and none is drawn: say so
   }
   function renderShelf() {
     var track = $("shelf");
-    data.shows = KW_ON ? (data.showsBy[who] || []).slice(0, KEEP_MAX) : [];
-    var anyone = KW_ON && PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
+    var mine = data.showsBy[who] && data.showsBy[who].length ? data.showsBy[who] : (OFFLINE && data.shared) || [];   // with nothing for this person, the shared list
+    data.shows = KW_ON ? mine.slice(0, KEEP_MAX) : [];
+    var anyone = KW_ON && (PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; }) || (OFFLINE && !!(data.shared && data.shared.length)));
     // a Jellyfin row (the Samsung app's moonfin.js): posters in a tighter row, see .jcard in tizen.css
     var jl = window.MoonfinTV && window.MoonfinTV.look ? window.MoonfinTV.look() : null;   // layout and size, chosen on the TV
     var jrow = NIGHT && data.shows.length > 0 && !!data.shows[0].jf && !(jl && jl.layout === "glass");
@@ -2186,20 +2187,39 @@
     shelfEls = Array.prototype.slice.call(track.children);
   }
 
+  // Keep watching with no computer: the one list the TV has (Android's Watch Next, or the Samsung app's Jellyfin row), the same for
+  // everyone in the house, less what is skipped or was removed from the row. Titles removed from the row are brought back when that
+  // would leave a Jellyfin row with nothing at all.
+  var jfDiag = "", jfHealed = false;
+  function shareWatchNext() {
+    var all = [];
+    try { all = JSON.parse(TV.watchNext()) || []; } catch (e) {}
+    var skipPkgs = (window.COUCH_CONFIG && window.COUCH_CONFIG.home && window.COUCH_CONFIG.home.skip_watch_next) || [];
+    var dismissed = kept("tvhome.dismissed_shows");
+    if (!Array.isArray(dismissed)) dismissed = [];
+    function pkgOf(it) { return (it.app && it.app.package) || it.package || ""; }
+    function sigOf(it) { return pkgOf(it) + "|" + (it.title || ""); }
+    var live = all.filter(function (it) { return skipPkgs.indexOf(pkgOf(it)) === -1; });
+    var wn = live.filter(function (it) { return dismissed.indexOf(String(it.id || "")) === -1 && dismissed.indexOf(sigOf(it)) === -1; });
+    if (window.MoonfinTV && !jfHealed && live.length && !wn.length) {   // once, at start: removing the last title later sticks
+      var back = {};
+      live.forEach(function (it) { back[String(it.id || "")] = 1; back[sigOf(it)] = 1; });
+      dismissed = dismissed.filter(function (x) { return !back[x]; });
+      keep("tvhome.dismissed_shows", dismissed);
+      wn = live;
+    }
+    jfHealed = true;
+    jfDiag = all.length + "/" + wn.length + "/" + PEOPLE.length + "/" + (PEOPLE.some(function (p) { return p.id === who; }) ? 1 : 0);
+    data.shared = wn;
+    PEOPLE.forEach(function (p) { data.showsBy[p.id] = wn; });
+  }
+
   // The Samsung app's Jellyfin row changed (moonfin.js): redraw just the row, the focus staying where it was.
   function reloadShelf() {
     if (!(TV && TV.watchNext && OFFLINE && KW_ON)) { refresh(); return; }
     // never reshuffle the row under a lift or an open menu: try again in a few seconds
     if (lift || ["pmenu", "settings", "gear", "smart", "updask", "shelfmenu", "appmenu", "menu", "inputs"].indexOf(zone) >= 0) { setTimeout(reloadShelf, 4000); return; }
-    var wn = [];
-    try { wn = JSON.parse(TV.watchNext()) || []; } catch (e) {}
-    var skipPkgs = (window.COUCH_CONFIG && window.COUCH_CONFIG.home && window.COUCH_CONFIG.home.skip_watch_next) || [];
-    var dismissed = kept("tvhome.dismissed_shows") || [];
-    wn = wn.filter(function (it) {
-      var pkg = (it.app && it.app.package) || it.package || "";
-      return skipPkgs.indexOf(pkg) === -1 && dismissed.indexOf(String(it.id || "")) === -1 && dismissed.indexOf(pkg + "|" + (it.title || "")) === -1;
-    });
-    PEOPLE.forEach(function (p) { data.showsBy[p.id] = wn; });
+    shareWatchNext();
     renderShelf();
     if (zone === "shelf") { s = Math.max(0, Math.min(s, shelfEls.length - 1)); paintFocus(); }
     fitClocks();
@@ -2224,11 +2244,14 @@
     f.removeChild(m);
     var fs = parseFloat(getComputedStyle(c).fontSize) || 0, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") ? 100000 : sec.getBoundingClientRect().top;
-    if (document.documentElement.classList.contains("cp-open")) {   // the widgets page is up: the row has gone, the widgets are in its place
+    if (document.documentElement.classList.contains("cp-open") && !document.documentElement.classList.contains("wx-open")) {   // the widgets page is up: the row has gone, the widgets are in its place
       var wcard = document.querySelector("#cp .cp-wx");
       rowTop = wcard ? Math.min(fitRowTop, wcard.getBoundingClientRect().top) : fitRowTop;
       var ahead = document.querySelector("#cp-apps .cpa-head");   // the Apps list is up: its heading is the top edge
       if (ahead) rowTop = Math.min(rowTop, ahead.getBoundingClientRect().top);
+    } else if (document.documentElement.classList.contains("wx-open")) {   // the weather screen is up: the clock clears its top
+      var wmain = document.querySelector("#wx-panel .wx-main");
+      rowTop = wmain ? Math.min(fitRowTop, wmain.getBoundingClientRect().top) : fitRowTop;
     } else fitRowTop = rowTop;
     var target = rowTop - 0.6 * rem, need = base + 0.01 * fs - target;   // need: how far the digits reach into the row
     var dy = 0, k = 1;
@@ -2964,8 +2987,13 @@
           }
           zone = "np";
         }
-        else if (peopleOn()) toPeople();
-        else if (hasQuick()) zone = "quick";   // offline the sleep and picture buttons are hidden
+        else if (peopleOn() || hasQuick()) {
+          // the picture is top left and the buttons top right: Up goes to the one above (the Samsung app; elsewhere the picture first)
+          var gb = gridEls[g] ? gridEls[g].getBoundingClientRect() : null;
+          if (window.MoonfinTV && hasQuick() && gb && gb.left + gb.width / 2 > window.innerWidth / 2) { zone = "quick"; qi = Math.max(0, quickVisible().length - 1); }
+          else if (peopleOn()) toPeople();
+          else { zone = "quick"; qi = 0; }   // offline the sleep and picture buttons are hidden
+        }
       } else if (dy < 0) {
         g -= GRID_COLS;
       } else if (row < lastRow) {
@@ -4786,17 +4814,7 @@
       data.bridge = false;
       // Keep watching with no computer: Android's own Watch Next list, the same for everyone in the house
       if (TV && TV.watchNext && KW_ON) {
-        var wn = [];
-        try { wn = JSON.parse(TV.watchNext()) || []; } catch (e) {}
-        var skipPkgs = (window.COUCH_CONFIG && window.COUCH_CONFIG.home && window.COUCH_CONFIG.home.skip_watch_next) || [];
-        var dismissed = kept("tvhome.dismissed_shows") || [];
-        wn = wn.filter(function (it) {
-          var pkg = (it.app && it.app.package) || it.package || "";
-          var id = String(it.id || "");
-          var sig = pkg + "|" + (it.title || "");
-          return skipPkgs.indexOf(pkg) === -1 && dismissed.indexOf(id) === -1 && dismissed.indexOf(sig) === -1;
-        });
-        PEOPLE.forEach(function (p) { data.showsBy[p.id] = wn; });
+        shareWatchNext();
       }
       detectNew();
       status(ALONE ? "" : t("computer_off"), true);

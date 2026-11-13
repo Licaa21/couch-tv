@@ -135,24 +135,27 @@ html.lighter .jcard.jnew { animation-duration: 260ms; }
 
 /* ---- the weather panel (weather.js) ---- */
 #wx-panel { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99997; color: #fff; font-family: inherit; overflow: hidden; }
-#wx-panel.wx-day { background: linear-gradient(180deg, #1d4a8f 0%, #16315f 55%, #0f1f3d 100%); }
-#wx-panel.wx-night { background: linear-gradient(180deg, #0e1730 0%, #0a1024 60%, #070b18 100%); }
+/* the weather screen is see-through: the clock and the photo stay behind it, dimmed, and the home steps aside as it does for the widgets page */
+#wx-panel.wx-day, #wx-panel.wx-night { background: rgba(10, 8, 12, 0.55); }
+html.wx-open .date, html.wx-open .top-left, html.wx-open .quick, html.wx-open .quick-note, html.wx-open .np, html.wx-open .shelf, html.wx-open .apps, html.wx-open #cp-hint {
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 400ms ease, visibility 0s linear 400ms;
+}
 #wx-panel svg { display: block; width: 100%; height: 100%; }
 #wx-panel .wx-msg { position: absolute; top: 45%; left: 0; right: 0; text-align: center; font-size: 2rem; opacity: 0.8; }
-#wx-panel .wx-grid { display: grid; grid-template-columns: 1fr 32rem; grid-template-rows: 1fr auto; gap: 2rem 4rem; height: 100%; box-sizing: border-box; padding: 4rem 5rem 3.5rem; }
-#wx-panel h1 { margin: 0; font-size: 3.5rem; line-height: 4rem; font-weight: 700; }
+#wx-panel .wx-grid { display: grid; grid-template-columns: 1fr 32rem; grid-template-rows: auto auto; align-content: end; gap: 1.5rem 4rem; height: 100%; box-sizing: border-box; padding: 0 5rem 3rem; }
+#wx-panel h1 { margin: 0; font-size: 3rem; line-height: 3.5rem; font-weight: 700; }
 #wx-panel .wx-main p { margin: 0.25rem 0 0; font-size: 1.5rem; opacity: 0.75; text-transform: capitalize; }
-#wx-panel .wx-now { display: flex; align-items: center; margin-top: 2rem; }
-#wx-panel .wx-now i { width: 9rem; height: 9rem; margin-right: 2rem; }
-#wx-panel .wx-now b { font-size: 9rem; line-height: 9rem; font-weight: 300; letter-spacing: -0.03em; }
+#wx-panel .wx-now { display: flex; align-items: center; margin-top: 1rem; }
+#wx-panel .wx-now i { width: 6rem; height: 6rem; margin-right: 1.5rem; }
+#wx-panel .wx-now b { font-size: 6rem; line-height: 6rem; font-weight: 300; letter-spacing: -0.03em; }
 #wx-panel .wx-now span { margin-left: 2rem; font-size: 2.5rem; font-weight: 500; opacity: 0.9; }
-#wx-panel .wx-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2.25rem; max-width: 50rem; }
-#wx-panel .wx-s { padding: 1rem 1.25rem; border-radius: 1rem; background: rgba(255, 255, 255, 0.1); }
+#wx-panel .wx-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-top: 1.25rem; max-width: 50rem; }
+#wx-panel .wx-s { padding: 0.625rem 1rem; border-radius: 1rem; background: rgba(255, 255, 255, 0.1); border: 0.125rem solid rgba(255, 255, 255, 0.08); }
 #wx-panel .wx-s small { display: block; font-size: 1.125rem; opacity: 0.7; }
-#wx-panel .wx-s b { display: block; margin-top: 0.25rem; font-size: 2rem; font-weight: 600; }
+#wx-panel .wx-s b { display: block; margin-top: 0.125rem; font-size: 1.75rem; font-weight: 600; }
 #wx-panel h3 { margin: 0 0 0.75rem; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.7; }
-#wx-panel .wx-side { padding: 1.25rem 1.5rem; border-radius: 1.25rem; background: rgba(255, 255, 255, 0.08); }
-#wx-panel .wx-d { display: flex; align-items: center; height: 3.5rem; font-size: 1.5rem; }
+#wx-panel .wx-side { padding: 1rem 1.5rem; border-radius: 1.25rem; background: rgba(255, 255, 255, 0.1); border: 0.125rem solid rgba(255, 255, 255, 0.08); }
+#wx-panel .wx-d { display: flex; align-items: center; height: 3rem; font-size: 1.5rem; }
 #wx-panel .wx-d > span:first-child { width: 4.75rem; font-weight: 600; text-transform: capitalize; }
 #wx-panel .wx-d i { flex: none; width: 2.25rem; height: 2.25rem; margin-right: 0.5rem; }
 #wx-panel .wx-d small { width: 3.25rem; font-size: 1.125rem; color: #8fc7ff; }
@@ -160,22 +163,22 @@ html.lighter .jcard.jnew { animation-duration: 260ms; }
 #wx-panel .wx-d b { width: 3.25rem; font-weight: 600; text-align: right; }
 #wx-panel .wx-bar { position: relative; flex: 1; height: 0.375rem; margin: 0 0.75rem; border-radius: 0.1875rem; background: rgba(255, 255, 255, 0.18); }
 #wx-panel .wx-bar u { position: absolute; top: 0; bottom: 0; border-radius: 0.1875rem; background: linear-gradient(90deg, #6dd5ff, #ffb347); }
-#wx-panel .wx-hours { grid-column: 1 / 3; padding: 1.25rem 1.5rem 1rem; border-radius: 1.25rem; background: rgba(255, 255, 255, 0.08); }
+#wx-panel .wx-hours { grid-column: 1 / 3; padding: 1rem 1.5rem 0.75rem; border-radius: 1.25rem; background: rgba(255, 255, 255, 0.1); border: 0.125rem solid rgba(255, 255, 255, 0.08); }
 #wx-panel .wx-hours > div { display: flex; justify-content: space-between; }
 #wx-panel .wx-h { width: 7rem; text-align: center; }
 #wx-panel .wx-h span { display: block; font-size: 1.25rem; opacity: 0.75; }
-#wx-panel .wx-h i { display: block; width: 3rem; height: 3rem; margin: 0.375rem auto; }
+#wx-panel .wx-h i { display: block; width: 2.5rem; height: 2.5rem; margin: 0.25rem auto; }
 #wx-panel .wx-h b { display: block; font-size: 1.75rem; font-weight: 600; }
 #wx-panel .wx-h small { display: block; height: 1.375rem; font-size: 1.125rem; color: #8fc7ff; }
-#wx-panel .wx-hint { position: absolute; right: 5rem; bottom: 1rem; font-size: 1rem; opacity: 0.5; }
+#wx-panel .wx-hint { position: absolute; right: 1.75rem; bottom: 0.875rem; font-size: 1rem; opacity: 0.8; text-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.6); }
 
 /* ---- the widgets page below the dock (panel.js) and the Apps menu: opening a menu fades the top buttons, the row and the
    dock out, exactly like "hide rows when idle", and dims what is left (the photo, the date and the clock), as Home settings does ---- */
 html.cp-open .top-left, html.cp-open .quick, html.cp-open .quick-note, html.cp-open .np, html.cp-open .shelf, html.cp-open .apps, html.cp-open #cp-hint {
-  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 400ms ease, visibility 0s linear 400ms;
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 250ms ease, visibility 0s linear 250ms;
 }
 #cp {
-  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0; transition: opacity 460ms ease;
+  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99990; opacity: 0; transition: opacity 250ms ease;
   color: #fff; font-family: "Inter", system-ui, sans-serif; font-weight: 450; -webkit-font-smoothing: antialiased;
 }
 html.cp-open #cp { opacity: 1; }
@@ -186,15 +189,14 @@ html.cp-apps-open #cp .cp-grid, html.cp-apps-open #cp .cp-hint { opacity: 0; vis
 html:not(.lighter) #cp { -webkit-backdrop-filter: blur(1.5rem) saturate(140%); backdrop-filter: blur(1.5rem) saturate(140%); }
 #cp .cp-grid {
   display: grid; grid-template-columns: 35rem 1fr; grid-template-rows: auto auto; gap: 1.5rem 3rem; align-content: end; box-sizing: border-box;
-  height: 100%; padding: 0 5rem 3.25rem; transform: translateY(10rem); transition: transform 560ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 260ms ease;
+  height: 100%; padding: 0 5rem 3.25rem; transform: translateY(4rem); transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 200ms ease;
 }
 html.cp-open #cp .cp-grid { transform: none; }
 #cp .cp-card {
   box-sizing: border-box; border: 0.1875rem solid rgba(255, 255, 255, 0.08); border-radius: 1.5rem; background: rgba(255, 255, 255, 0.10);
-  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.3); transition: transform 200ms, background 200ms;
-}
+}   /* no big shadow, no scaling and no transition: they made moving between the buttons stutter on the TV */
 html:not(.lighter) #cp .cp-card { -webkit-backdrop-filter: blur(1.5rem) saturate(160%); backdrop-filter: blur(1.5rem) saturate(160%); }
-#cp .cp-card.on { border-color: #fff; background: rgba(255, 255, 255, 0.26); transform: scale(1.04); }
+#cp .cp-card.on { border-color: #fff; background: rgba(255, 255, 255, 0.26); }
 #cp .cp-wx { grid-row: 1 / 3; padding: 1.5rem 2rem; }
 #cp .cp-wxbody { font-size: 1.5rem; opacity: 0.8; }
 #cp .cp-wx h3 { margin: 0; font-size: 1.625rem; font-weight: 600; }
@@ -267,3 +269,7 @@ html.lighter main.home, html.lighter #cp, html.lighter #cp .cp-grid { transition
 .theme-night .app:not(.focus) .face img { filter: none; }
 .app .face { transition: none; }
 .tile.app { will-change: transform; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+
+/* Home settings: the focused row no longer scales, casts a big shadow or fades, which made a held key stutter. */
+.srow { transition: none; }
+.srow.focus { transform: none; box-shadow: none; }

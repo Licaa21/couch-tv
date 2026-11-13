@@ -132,8 +132,14 @@
     box.className = "wx-night";
     box.innerHTML = '<div class="wx-msg">' + esc(t("wx_loading")) + "</div>";
     document.body.appendChild(box);
+    document.documentElement.classList.add("wx-open");
+    function fit() { if (alive && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }
     var key = cfg.lat + "," + cfg.lon + "," + (cfg.f ? "f" : "c"), alive = true;
-    function close() { alive = false; document.removeEventListener("keydown", keys, true); if (box.parentNode) box.parentNode.removeChild(box); }
+    function close() {
+      alive = false; document.removeEventListener("keydown", keys, true); if (box.parentNode) box.parentNode.removeChild(box);
+      document.documentElement.classList.remove("wx-open");
+      if (window.tv && window.tv.fitClocks) window.tv.fitClocks();   // the clock goes back where the home has it
+    }
     function keys(e) {
       if (e.keyCode === 10009 || e.keyCode === 27 || e.keyCode === 13) { e.preventDefault(); close(); }
       e.stopImmediatePropagation();
@@ -141,13 +147,13 @@
     document.addEventListener("keydown", keys, true);
     var kept = read();
     var shown = false;
-    if (kept && kept.key === key && kept.data) { try { draw(box, cfg, kept.data); shown = true; } catch (e) {} }
+    if (kept && kept.key === key && kept.data) { try { draw(box, cfg, kept.data); shown = true; setTimeout(fit, 30); } catch (e) {} }
     if (kept && kept.key === key && Date.now() - kept.at < FRESH && shown) return;
     fetchWeather(cfg, function (err, w) {
       if (!alive) return;
       if (err) { if (!shown) box.innerHTML = '<div class="wx-msg">' + esc(t("wx_error")) + "</div><small class=\"wx-hint\">" + esc(t("wx_back_hint")) + "</small>"; return; }
       try { localStorage.setItem(KEY, JSON.stringify({ key: key, at: Date.now(), data: w })); } catch (e) {}
-      try { draw(box, cfg, w); } catch (e) { box.innerHTML = '<div class="wx-msg">' + esc(t("wx_error")) + "</div>"; }
+      try { draw(box, cfg, w); setTimeout(fit, 30); } catch (e) { box.innerHTML = '<div class="wx-msg">' + esc(t("wx_error")) + "</div>"; }
     });
   }
 

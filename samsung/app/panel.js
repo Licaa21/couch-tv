@@ -153,7 +153,7 @@
     void el.offsetHeight;   // laid out below the screen first, so it rises
     root.classList.add("cp-open");
     document.addEventListener("keydown", keys, true);
-    setTimeout(function () { busy = false; if (isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }, 600);   // the clock clears the widgets
+    setTimeout(function () { busy = false; if (isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }, 450);   // the clock clears the widgets
   }
   function close(cb) {
     if (!isOpen) { if (cb) cb(); return; }
@@ -166,7 +166,7 @@
       if (!isOpen && el) el.style.display = "none";
       if (!isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks();   // back above the row, once the home is in place
       if (cb) cb();
-    }, 560);
+    }, 450);
   }
 
   // the arrow under the dock: the page is below

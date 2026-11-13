@@ -204,25 +204,28 @@
   // TV's apps list (by its name or its id) and tries each, the visible ones first; if none opens it says so.
   var SETTINGS_NAME = /^(settings?|setări|setari|einstellungen|paramètres|réglages|impostazioni|ajustes|configuración|ayarlar|instellingen)$/i;
   function openTvSettings() {
-    // First what Free My TV does on Tizen: ask the platform for its "setting" screen, then the TV's menu app; then this
-    // TV's own apps list, by name or id.
-    function fromList() {
-      var found = tizenApps.filter(function (a) {
-        return a.id !== SELF && (SETTINGS_NAME.test(String(a.name || "").trim()) || /(^|[.\-_])settings?([.\-_]|$)/i.test(a.id || ""));
-      }).sort(function (a, b) { return (b.show !== false) - (a.show !== false); }).map(function (a) { return a.id; });
-      var ids = found.concat(["org.tizen.menu"]);
-      ["org.tizen.settings-tv-ref", "org.tizen.tv-settings", "org.tizen.setting"].forEach(function (g) { if (ids.indexOf(g) < 0) ids.push(g); });
-      (function attempt(i) {
-        if (i >= ids.length) { skyNote(t("tv_settings_none") + (found.length ? " (" + found.slice(0, 3).join(", ") + ")" : "")); return; }
-        try {
-          tizen.application.launch(ids[i], function () { send("log", "settings: launched " + ids[i]); }, function () { attempt(i + 1); });
-        } catch (e) { attempt(i + 1); }
-      })(0);
-    }
-    try {
-      var ctl = new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/setting", null, null, null, []);
-      tizen.application.launchAppControl(ctl, null, function () { send("log", "settings: opened by app control"); }, fromList);
-    } catch (e) { fromList(); }
+    // Free My TV's Tizen build opens it with the platform's "setting" app control and falls back to the TV's menu app, and on this
+    // kind of TV that took 20 seconds. So the menu app goes first, then the app control, then this TV's apps list by name or id,
+    // each only when the one before said it could not (never several at once: they would all open on top of each other).
+    var found = tizenApps.filter(function (a) {
+      return a.id !== SELF && (SETTINGS_NAME.test(String(a.name || "").trim()) || /(^|[.\-_])settings?([.\-_]|$)/i.test(a.id || ""));
+    }).sort(function (a, b) { return (b.show !== false) - (a.show !== false); }).map(function (a) { return a.id; });
+    var tries = ["org.tizen.menu", "control"].concat(found);
+    ["org.tizen.settings-tv-ref", "org.tizen.tv-settings", "org.tizen.setting"].forEach(function (g) { if (tries.indexOf(g) < 0) tries.push(g); });
+    var opened = false;
+    (function attempt(i) {
+      if (opened) return;
+      if (i >= tries.length) { skyNote(t("tv_settings_none") + (found.length ? " (" + found.slice(0, 3).join(", ") + ")" : "")); return; }
+      var moved = false;
+      function next() { if (!moved) { moved = true; attempt(i + 1); } }
+      function done() { opened = true; send("log", "settings: opened by " + tries[i]); }
+      try {
+        if (tries[i] === "control") {
+          var ctl = new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/setting", null, null, null, []);
+          tizen.application.launchAppControl(ctl, null, done, next);
+        } else tizen.application.launch(tries[i], done, next);
+      } catch (e) { next(); }
+    })(0);
     return true;
   }
 
