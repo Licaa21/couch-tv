@@ -5,3 +5,27 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+
+/* The Jellyfin setup screen (moonfin.js): solid, no blur and no inset, for the older Samsung browsers. */
+#jf-setup {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 99998;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 8, 12, 0.96); color: #fff; font-family: inherit;
+}
+#jf-setup .jf-panel { width: 1100px; max-width: 90%; }
+#jf-setup h2 { margin: 0 0 8px; font-size: 52px; font-weight: 600; }
+#jf-setup p { margin: 0 0 28px; font-size: 26px; opacity: 0.7; }
+#jf-setup label { display: block; margin: 0 0 18px; font-size: 26px; opacity: 0.9; }
+#jf-setup input {
+  display: block; box-sizing: border-box; width: 100%; margin-top: 8px; padding: 16px 20px;
+  font-size: 32px; color: #fff; background: rgba(255, 255, 255, 0.08);
+  border: 3px solid transparent; border-radius: 14px; outline: none;
+}
+#jf-setup input:focus, #jf-setup button:focus { border-color: #fff; background: rgba(255, 255, 255, 0.2); }
+#jf-setup .jf-row { margin-top: 28px; }
+#jf-setup button {
+  margin-right: 18px; padding: 16px 36px; font-size: 30px; color: #fff;
+  background: rgba(255, 255, 255, 0.1); border: 3px solid transparent; border-radius: 14px; outline: none;
+}
+#jf-setup #jf-msg { min-height: 40px; margin-top: 24px; font-size: 28px; }
+#jf-setup small { display: block; margin-top: 12px; font-size: 22px; opacity: 0.55; }

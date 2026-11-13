@@ -241,6 +241,7 @@
     ps5: '<svg viewBox="0 0 24 24"><path d="M7 6v12M17 6v12M7 10h10M7 14h10"/><circle cx="12" cy="12" r="8.5"/></svg>',
     xbox: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M7.5 7.5c2.5 2.5 6.5 2.5 9 0M7.5 16.5c2.5-2.5 6.5-2.5 9 0M7 8c2 3.5 2 4.5 0 8M17 8c-2 3.5-2 4.5 0 8"/></svg>',
     switch: '<svg viewBox="0 0 24 24"><rect x="5" y="4" width="6" height="16" rx="3"/><rect x="13" y="4" width="6" height="16" rx="3"/><circle cx="8" cy="8" r="1" class="fill"/><circle cx="16" cy="14" r="1" class="fill"/></svg>',
+    tv: '<svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/></svg>',
     hdmi: '<svg viewBox="0 0 24 24"><path d="M4 8h16v5l-3 4H7l-3-4z"/><path d="M8 8v3M11 8v3M13 8v3M16 8v3"/></svg>',
     screensaver: '<svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="14" rx="2.5"/><path d="M15.2 7.3a3.4 3.4 0 1 0 2.1 5 3.9 3.9 0 0 1-2.1-5z"/></svg>',
     headphones: '<svg viewBox="0 0 24 24"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>',
@@ -1787,7 +1788,7 @@
     inItems = list.map(function (x) {
       var kind = x.type === "hdmi" ? "HDMI" : t("input");
       var sub = (x.devices || []).join(", ");
-      return { act: "input", id: x.id, icon: ICONS.input, label: x.label || kind, sub: sub };
+      return { act: "input", id: x.id, icon: ICONS[x.icon] || ICONS.input, label: x.label || kind, sub: sub };
     });
     if ((TV && TV.openSettingsScreen) || ON_TV || window.MOCK_INPUTS) {
       inItems.push({ act: "bluetooth", icon: ICONS.bluetooth, label: t("bluetooth"), sub: t("bt_sub") });
@@ -4608,6 +4609,8 @@
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
   window.tv = { back: function () { if (idleAmbientActive) { setIdleAmbient(false); resetSmartIdle(); return; } if (idlePhotoInput(null)) return; goHome(); resetIdlePhoto(); resetSmartIdle(); },
     home: function () { forgetFocus(); if (idleAmbientActive) { setIdleAmbient(false); resetSmartIdle(); return; } if (idlePhotoInput(null)) return; if (zone === "settings") closeSettings(); else goHome(); refresh(); resetIdlePhoto(); resetSmartIdle(); },
+    // re-read the lists and redraw, nothing else (the Samsung app's Jellyfin row arrives late)
+    refresh: function () { refresh(); },
     screenOff: function () { toggleScreenOff(true); },
     wakeScreen: function () { toggleScreenOff(false); },
     isScreenOff: function () { return screenOffActive; },

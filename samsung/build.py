@@ -76,16 +76,21 @@ def main():
     html = html.replace(css, css + '\n<link rel="stylesheet" href="tizen.css">')
     html = html.replace(tag, '<script src="$WEBAPIS/webapis/webapis.js"></script>\n'
                              '<script src="settings.js"></script>\n<script src="tizen-apps.js"></script>\n'
-                             '<script src="tizen.js"></script>\n' + tag)
+                             '<script src="moonfin.js"></script>\n<script src="tizen.js"></script>\n' + tag)
     with open(index, "w") as f:
         f.write(html)
 
     # config.js: the bridge's latest settings (boot.html keeps them), else the ones built in
+    pub = config.public()
+    # the Input button (live TV, HDMI 1 to 4) works on the TV itself, so every TV gets it
+    for tv in pub.get("tvs", []):
+        if "input" not in (tv.get("quick") or []):
+            tv["quick"] = (tv.get("quick") or []) + ["input"]
     with open(os.path.join(stage, "config.js"), "w") as f:
         f.write("(function () {\n  var t = null;\n"
                 "  try { t = localStorage.getItem(\"couch.configjs\"); } catch (e) {}\n"
                 "  if (t) try { (0, eval)(t); } catch (e) {}\n"
-                "  if (!window.COUCH_CONFIG) window.COUCH_CONFIG = " + json.dumps(config.public()) + ";\n})();\n")
+                "  if (!window.COUCH_CONFIG) window.COUCH_CONFIG = " + json.dumps(pub) + ";\n})();\n")
     # Per-TV settings, from this TV's entry in config.json.
     tv_cfg = next((t for t in config.TVS if t["id"] == (a.tv or config.DEFAULT_TV)), None)
     if a.tv and tv_cfg is None:

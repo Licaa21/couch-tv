@@ -65,14 +65,18 @@
       if (pkg && !byPkg[pkg]) {
         byPkg[pkg] = a;
         shown.push({ package: pkg, label: MAP[pkg].name || a.name });
-      } else if (!pkg && a.show && STORE.test(a.packageId || "") && !HIDE.test(a.name || "") && !byPkg[a.id]) {
+      } else if (!pkg && a.show && (STORE.test(a.packageId || "") || /^moonfin$/i.test(a.name || "")) && !HIDE.test(a.name || "") && !byPkg[a.id]) {
+        // Moonfin is sideloaded, so its id is not a store one; it is shown by name
         byPkg[a.id] = a;
         shown.push({ package: a.id, label: a.name });
       }
     });
     if (SKY_PORT) shown.unshift({ package: SKY, label: "Sky" });
+    shown.unshift({ package: JF, label: "Jellyfin" });
+    shown.unshift({ package: LIVE, label: "TV" });
   }
-  var SKY = "local.sky", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
+  var SKY = "local.sky", LIVE = "local.tv", JF = "local.jellyfin", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
+  function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
   sortOut();
   send("log", "apps on this TV: " + tizenApps.length + ", shown: " + shown.map(function (a) { return a.label; }).join(", "));
 
@@ -124,15 +128,16 @@
     catch (e) { skyNote("Sky did not close. " + errText(e)); }
   }
 
-  function openSky() {
-    function failed(step, e) { skyOn = false; skyNote("Sky did not open (" + step + "). " + errText(e)); }
+  // Any input or live TV, the same way: the picked source full screen in front of this app.
+  function showSource(match, label) {
+    function failed(step, e) { skyOn = false; skyNote(label + " " + t("src_failed") + " (" + step + "). " + errText(e)); }
     try {
       tizen.systeminfo.getPropertyValue("VIDEOSOURCE", function (info) {
         var list = (info && info.connected) || [], src = null;
-        list.forEach(function (s) { if (s.type === "HDMI" && s.number === SKY_PORT) src = s; });
+        list.forEach(function (s) { if (!src && match(s)) src = s; });
         if (!src) {
-          failed("HDMI " + SKY_PORT + " not connected", "The TV lists: " +
-            (list.map(function (s) { return s.type + " " + s.number; }).join(", ") || "nothing"));
+          failed(t("src_not_connected"), t("src_lists") + " " +
+            (list.map(function (s) { return s.type + " " + s.number; }).join(", ") || "-"));
           return;
         }
         tizen.tvwindow.setSource(src, function () {
@@ -144,6 +149,41 @@
       }, function (e) { failed("list inputs", e); });
     } catch (e) { failed("start", e); }
     return true;
+  }
+
+  function openSky() {
+    return showSource(function (s) { return s.type === "HDMI" && s.number === SKY_PORT; }, "Sky");
+  }
+
+  // ---------- the Input button: live TV and the HDMI ports, shown by the TV window ----------
+  // Ids are "tv" or "<type>:<port>" ("HDMI:2"). HDMI 1 to 4 are always listed; further ports and the
+  // other inputs (AV, component) appear once the TV says they are connected. A port with nothing
+  // plugged in says so when it is picked.
+  var INPUTS_KEY = "couch.tizen.inputs", extra = [];
+  try { extra = JSON.parse(localStorage.getItem(INPUTS_KEY) || "[]"); } catch (e) {}
+  try {
+    tizen.systeminfo.getPropertyValue("VIDEOSOURCE", function (info) {
+      extra = ((info && info.connected) || []).filter(function (s) {
+        return s.type !== "TV" && !(s.type === "HDMI" && s.number <= 4);
+      }).map(function (s) { return { type: s.type, number: s.number }; });
+      try { localStorage.setItem(INPUTS_KEY, JSON.stringify(extra)); } catch (e) {}
+    }, function () {});
+  } catch (e) {}
+
+  function tvInputs() {
+    var list = [{ id: "tv", label: t("tv_live"), type: "tv", icon: "tv", devices: [] }];
+    for (var n = 1; n <= 4; n++) list.push({ id: "HDMI:" + n, label: "HDMI " + n, type: "hdmi", icon: "hdmi", devices: [] });
+    extra.forEach(function (s) {
+      list.push({ id: s.type + ":" + s.number, label: s.type + " " + s.number, type: s.type === "HDMI" ? "hdmi" : "input",
+        icon: s.type === "HDMI" ? "hdmi" : "input", devices: [] });
+    });
+    return JSON.stringify(list);
+  }
+
+  function openInput(id) {
+    var p = String(id).split(":"), live = p[0] === "tv", num = parseInt(p[1], 10);
+    return showSource(function (s) { return live ? s.type === "TV" : s.type === p[0] && s.number === num; },
+      live ? t("tv_live") : p[0] + " " + num);
   }
 
   // Runs before app.js's own keys: with Sky on screen, the home must not move behind it.
@@ -166,6 +206,8 @@
 
   function launch(pkg) {
     if (pkg === SKY) return openSky();
+    if (pkg === LIVE) return openInput("tv");
+    if (pkg === JF) { window.MoonfinTV.setup(); return true; }
     var a = byPkg[pkg], m = MAP[pkg];
     var ids = a ? [a.id] : [];
     if (m) (m.ids || []).concat(m.app ? [m.app] : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
@@ -184,8 +226,17 @@
     return true;
   }
 
+  // The TV and Jellyfin tiles have no app logo: a glass-coloured square with a line icon.
+  function tileIcon(shape, bg) {
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' +
+      '<rect width="24" height="24" rx="5" fill="' + bg + '"/><g fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" ' +
+      'stroke-linejoin="round" transform="translate(4 4) scale(.667)">' + shape + "</g></svg>");
+  }
+
   function iconUrl(pkg) {
     if (pkg === SKY) return "logo-sky.png";
+    if (pkg === LIVE) return tileIcon('<rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/>', "#0a84ff");
+    if (pkg === JF) return tileIcon('<circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/>', "#7b5ea7");
     var m = MAP[pkg];
     if (m && m.logo) return "logos/" + pkg + ".png";
     var a = byPkg[pkg];
@@ -194,15 +245,24 @@
   }
 
   window.TVOS = {
-    apps: function () { return JSON.stringify(shown); },
+    // the TV tile's name is said in the language chosen, which is set after this file loads
+    apps: function () {
+      return JSON.stringify(shown.map(function (a) { return a.package === LIVE ? { package: LIVE, label: t("tv_live") } : a; }));
+    },
     launch: launch,
     iconUrl: iconUrl,
     bannerUrl: function () { return null; },
     kept: function (k) { try { return localStorage.getItem("tvos." + k); } catch (e) { return null; } },
     keep: function (k, v) { try { localStorage.setItem("tvos." + k, v); } catch (e) {} },
-    // the input button goes through the bridge (it presses Source); a web app cannot open that list
-    canOpenInputs: function () { return false; },
-    openInputs: function () { return false; }
+    // the Input button: the TV's own window shows the picked source (no bridge, no Source key)
+    canOpenInputs: function () { return true; },
+    openInputs: function () { return false; },
+    tvInputs: tvInputs,
+    openInput: openInput,
+    // Keep watching from the Jellyfin server typed in on the TV, opened in Moonfin (moonfin.js)
+    watchNext: window.MoonfinTV.watchNext,
+    openWatchNext: window.MoonfinTV.open,
+    toast: skyNote
   };
 
   // ---------- the remote ----------
@@ -266,6 +326,7 @@
 
   // coming back to the app (after Netflix, say): read the lists again
   document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && window.MoonfinTV) window.MoonfinTV.refresh(true);   // progress moved while Moonfin was open
     if (!document.hidden && window.tv && window.tv.resume) window.tv.resume();
     if (!document.hidden && !polling) jobs();
   });

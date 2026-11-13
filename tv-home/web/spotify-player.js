@@ -63,7 +63,7 @@
   function warm() { if (!state.failed && !state.deviceId) player().catch(function () {}); }
 
   function toTvApp(note) {
-    if (note) note("Opening Spotify on the TV…");
+    if (note) note(window.I18N ? window.I18N.t("spotify_opening") : "Opening Spotify on the TV…");
     try {
       fetch(url("api/transfer"), { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "tvapp" }) }).catch(function () {});
