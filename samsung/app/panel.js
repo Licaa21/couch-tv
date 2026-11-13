@@ -99,6 +99,7 @@
     popup.apps = list;
     root.appendChild(popup);
     root.classList.add("cp-apps-open");   // the widgets step aside while the list is up
+    setTimeout(function () { if (popup && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }, 520);   // the clock clears its heading once it has risen
     pop.tiles = Array.prototype.slice.call(popup.querySelectorAll(".tile"));
     pop.i = 0;
     popPaint(true);
@@ -113,7 +114,7 @@
     box.style.scrollBehavior = instant ? "auto" : "";
     box.scrollTop = Math.max(0, want);
   }
-  function closeApps() { if (popup && popup.parentNode) popup.parentNode.removeChild(popup); popup = null; root.classList.remove("cp-apps-open"); }
+  function closeApps() { if (popup && popup.parentNode) popup.parentNode.removeChild(popup); popup = null; root.classList.remove("cp-apps-open"); if (window.tv && window.tv.fitClocks && isOpen) window.tv.fitClocks(); }
   function popKeys(e) {
     var k = e.keyCode, n = pop.tiles.length;
     if (k === 10009 || k === 27 || k === 8) closeApps();
@@ -152,7 +153,7 @@
     void el.offsetHeight;   // laid out below the screen first, so it rises
     root.classList.add("cp-open");
     document.addEventListener("keydown", keys, true);
-    setTimeout(function () { busy = false; }, 580);
+    setTimeout(function () { busy = false; if (isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks(); }, 600);   // the clock clears the widgets
   }
   function close(cb) {
     if (!isOpen) { if (cb) cb(); return; }
@@ -160,7 +161,12 @@
     isOpen = false; busy = true;
     root.classList.remove("cp-open");
     document.removeEventListener("keydown", keys, true);
-    setTimeout(function () { busy = false; if (!isOpen && el) el.style.display = "none"; if (cb) cb(); }, 560);
+    setTimeout(function () {
+      busy = false;
+      if (!isOpen && el) el.style.display = "none";
+      if (!isOpen && window.tv && window.tv.fitClocks) window.tv.fitClocks();   // back above the row, once the home is in place
+      if (cb) cb();
+    }, 560);
   }
 
   // the arrow under the dock: the page is below

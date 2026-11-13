@@ -190,11 +190,11 @@ html:not(.lighter) #cp { -webkit-backdrop-filter: blur(1.5rem) saturate(140%); b
 }
 html.cp-open #cp .cp-grid { transform: none; }
 #cp .cp-card {
-  box-sizing: border-box; border: 0.1875rem solid rgba(255, 255, 255, 0.10); border-radius: 1.5rem; background: rgba(18, 24, 40, 0.62);
+  box-sizing: border-box; border: 0.1875rem solid rgba(255, 255, 255, 0.08); border-radius: 1.5rem; background: rgba(255, 255, 255, 0.10);
   box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.3); transition: transform 200ms, background 200ms;
 }
 html:not(.lighter) #cp .cp-card { -webkit-backdrop-filter: blur(1.5rem) saturate(160%); backdrop-filter: blur(1.5rem) saturate(160%); }
-#cp .cp-card.on { border-color: #fff; background: rgba(30, 40, 64, 0.8); transform: scale(1.04); }
+#cp .cp-card.on { border-color: #fff; background: rgba(255, 255, 255, 0.26); transform: scale(1.04); }
 #cp .cp-wx { grid-row: 1 / 3; padding: 1.5rem 2rem; }
 #cp .cp-wxbody { font-size: 1.5rem; opacity: 0.8; }
 #cp .cp-wx h3 { margin: 0; font-size: 1.625rem; font-weight: 600; }
@@ -213,7 +213,7 @@ html:not(.lighter) #cp .cp-card { -webkit-backdrop-filter: blur(1.5rem) saturate
 #cp .cp-btn { display: flex; flex: none; flex-direction: column; align-items: center; justify-content: center; width: 11.5rem; height: 8.75rem; margin-right: 1.25rem; }
 #cp .cp-btn i { width: 3rem; height: 3rem; margin-bottom: 0.625rem; }
 #cp .cp-btn b { font-size: 1.25rem; font-weight: 600; text-align: center; line-height: 1.4rem; }
-#cp .cp-hint { position: absolute; right: 5rem; bottom: 0.875rem; font-size: 1rem; opacity: 0.8; text-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.6); }
+#cp .cp-hint { position: absolute; right: 1.75rem; bottom: 0.875rem; font-size: 1rem; opacity: 0.8; text-shadow: 0 0.125rem 0.75rem rgba(0, 0, 0, 0.6); }
 
 /* every app on the TV, A to Z: the dock grown into a full list (it uses the home's own .grid and .tile.app styles) */
 #cp-apps {
@@ -234,7 +234,7 @@ html:not(.lighter) #cp .cp-card { -webkit-backdrop-filter: blur(1.5rem) saturate
 /* the panel is the home's .grid (glass, rounded); here it holds ten columns and scrolls with the focus */
 #cp-apps .cpa-grid {
   position: relative; display: grid; grid-template-columns: repeat(10, 7rem); grid-auto-rows: 7rem; height: 23rem; overflow: hidden; box-sizing: border-box;
-  padding: 2.25rem 3.375rem 3.75rem; scroll-behavior: smooth; background: rgba(20, 26, 42, 0.74);
+  padding: 2.25rem 3.375rem 3.75rem; scroll-behavior: smooth; background: rgba(34, 34, 38, 0.66);
 }
 #cp-apps .cpa-hint { display: none; }
 html.lighter #cp-apps, html.lighter #cp-apps .cpa-wrap { animation-duration: 200ms; }
@@ -253,3 +253,10 @@ html.lighter main.home, html.lighter #cp, html.lighter #cp .cp-grid { transition
    tile scales or fades, so the logo shows square for about a second. Rounding the picture and the
    glint themselves keeps the corners; a mask on the face would also cut its shadow. */
 .face img, .face::after { border-radius: inherit; }
+
+/* The light that slid across a focused tile and its 3D sway showed on the TV as clipped patches of light (the dock and the Apps menu):
+   the focused tile keeps its white ring and lift. The name of the tile just left no longer lingers over the new one. */
+.tile.focus .face { animation: none; }
+.tile.focus .face::after { display: none; }
+.app .label { transition: none; }
+.app.focus .label { transition: opacity 120ms ease; }

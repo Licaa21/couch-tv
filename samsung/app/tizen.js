@@ -132,6 +132,50 @@
   // tvwindow only takes one of the TV's own source objects (a plain {type, number} is refused: "cannot convert
   // Object to SystemInfoVideoSourceInfo"), and a 2021 Q67A listed just "TV 1" as connected while a PS5 was on
   // HDMI 2. So the connected list is searched first and then the supported one, which names every port.
+  // The TV's own network remote, asked from this app: a key as if pressed on the remote. It is the way left when the TV
+  // does not list a port for tvwindow (a 2021 Q67A lists only "TV 1"). The TV asks "Allow?" the first time and then
+  // hands out a token, kept here. done(true) once the key went out, done(false) when no door opened.
+  var RK_TOKEN = "couch.tizen.rk";
+  var rkBusy = false;
+  function remoteKey(key, done0) {
+    if (rkBusy) return;   // one at a time: a second press while the first waits for "Allow" does nothing
+    rkBusy = true;
+    function done(ok) { rkBusy = false; done0(ok); }
+    var tok = "", name = "";
+    try { tok = localStorage.getItem(RK_TOKEN) || ""; } catch (e) {}
+    try { name = btoa("Couch TV"); } catch (e) { name = "Q291Y2ggVFY="; }
+    var urls = ["wss://127.0.0.1:8002", "ws://127.0.0.1:8001", "wss://localhost:8002"].map(function (u) {
+      return u + "/api/v2/channels/samsung.remote.control?name=" + name + (tok && u.indexOf("wss") === 0 ? "&token=" + tok : "");
+    });
+    (function attempt(i) {
+      if (i >= urls.length) { done(false); return; }
+      var ws, over = false;
+      function next() { if (over) return; over = true; clearTimeout(timer); try { ws.close(); } catch (e) {} attempt(i + 1); }
+      var timer = setTimeout(next, i === 0 ? 12000 : 3000);   // the first try may wait for a tap on "Allow"
+      try { ws = new WebSocket(urls[i]); } catch (e) { clearTimeout(timer); attempt(i + 1); return; }
+      ws.onerror = next;
+      ws.onclose = next;
+      ws.onmessage = function (m) {
+        var d = null;
+        try { d = JSON.parse(m.data); } catch (e) { return; }
+        if (d.event === "ms.channel.unauthorized") {   // refused, or a token the TV no longer knows: forget it and stop
+          try { localStorage.removeItem(RK_TOKEN); } catch (e) {}
+          over = true; clearTimeout(timer); try { ws.close(); } catch (e) {}
+          done(false);
+          return;
+        }
+        if (d.event !== "ms.channel.connect") return;
+        if (d.data && d.data.token) { try { localStorage.setItem(RK_TOKEN, d.data.token); } catch (e) {} }
+        try {
+          ws.send(JSON.stringify({ method: "ms.remote.control", params: { Cmd: "Click", DataOfCmd: key, Option: "false", TypeOfRemote: "SendRemoteKey" } }));
+        } catch (e) { next(); return; }
+        over = true; clearTimeout(timer);
+        setTimeout(function () { try { ws.close(); } catch (e) {} }, 600);
+        done(true);
+      };
+    })(0);
+  }
+
   function showSource(type, number, label) {
     var listed = "";
     function failed(step, e) {
@@ -154,7 +198,11 @@
         var conn = (info && info.connected) || [], supp = (info && info.supported) || [], src = null;
         listed = names(conn) + " | " + names(supp);
         conn.concat(supp).forEach(function (s) { if (!src && s.type === type && (type === "TV" || s.number === number)) src = s; });
-        if (src) go(src); else failed(t("src_not_connected"), "");
+        if (src) { go(src); return; }
+        // not listed: the TV's remote key for it, if that door opens
+        remoteKey(type === "TV" ? "KEY_TV" : type === "HDMI" ? "KEY_HDMI" + number : "KEY_SOURCE", function (ok) {
+          if (!ok) failed(t("src_not_connected"), "");
+        });
       }, function (e) { failed("list inputs", e); });
     } catch (e) { failed("start", e); }
     return true;
@@ -204,7 +252,13 @@
     var ids = found.slice();
     ["org.tizen.settings-tv-ref", "org.tizen.tv-settings", "org.tizen.setting"].forEach(function (g) { if (ids.indexOf(g) < 0) ids.push(g); });
     (function attempt(i) {
-      if (i >= ids.length) { skyNote(t("tv_settings_none") + (found.length ? " (" + found.slice(0, 3).join(", ") + ")" : "")); return; }
+      if (i >= ids.length) {
+        // no app opened: the TV's menu key, if the network remote answers
+        remoteKey("KEY_MENU", function (ok) {
+          if (!ok) skyNote(t("tv_settings_none") + (found.length ? " (" + found.slice(0, 3).join(", ") + ")" : ""));
+        });
+        return;
+      }
       try {
         tizen.application.launch(ids[i], function () { send("log", "settings: launched " + ids[i]); },
           function () { attempt(i + 1); });

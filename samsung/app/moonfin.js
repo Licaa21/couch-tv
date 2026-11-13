@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   var CFG = "couch.jf", ROWS = "couch.jf.rows", MOON = "MoonfinApp.moonfin", MAX = 20, PER = 12;
-  var busy = false, lastTry = 0;
+  var busy = false, lastTry = 0, problem = "";   // problem: why the last read failed ("net", "key", "user", "http")
 
   function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
   function read(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
@@ -221,14 +221,21 @@
     var cfg = read(CFG);
     if (!cfg || busy || (!force && Date.now() - lastTry < 30000)) { if (done) done(null); return; }
     busy = true; lastTry = Date.now();
+    function bad(e) {
+      var changed = problem !== e;
+      problem = e; busy = false;
+      if (e === "net") setDown(true);
+      if (changed) redraw();   // the row says why it is empty
+      if (done) done(e);
+    }
     withUser(cfg, function (err, c) {
-      if (err) { busy = false; if (err === "net") setDown(true); if (done) done(err); return; }
+      if (err) { bad(err); return; }
       write(CFG, c);
       resume(c, function (err2, j) {
-        if (err2) { busy = false; if (err2 === "net") setDown(true); if (done) done(err2); return; }
+        if (err2) { bad(err2); return; }
         // a server with no Next up (or one that fails) still shows what is in progress
         nextUp(c, function (err3, n) {
-          busy = false;
+          busy = false; problem = "";
           var app = { package: moonId(), name: "Moonfin" };
           var items = combine(j.Items || [], err3 || !n ? [] : n.Items || []);
           var cards = items.map(function (it) { return card(c, it, app); });
@@ -366,7 +373,7 @@
       if (!c.server || !c.key) { say(t("jf_need")); return; }
       say(t("jf_connecting"));
       withUser(c, function (err, ok) {
-        if (err) { say(t(err === "key" ? "jf_err_key" : err === "user" ? "jf_err_user" : "jf_err_net")); return; }
+        if (err) { say(t(err === "key" ? "jf_err_key" : err === "user" ? "jf_err_user" : err === "http" ? "jf_err_http" : "jf_err_net")); return; }
         write(CFG, ok);
         busy = false;
         refresh(true, function (e2, n) {
@@ -421,6 +428,7 @@
 
   // Home settings (app.js) has a Jellyfin section: it opens these two screens and shows the server.
   window.MoonfinTV = { watchNext: watchNext, open: open, setup: setup, openLook: openLook, look: look,
-    server: function () { var c = read(CFG); return c && c.server ? c.server : ""; }, fb: fb, updated: function () { return lastUpdate; },
+    server: function () { var c = read(CFG); return c && c.server ? c.server : ""; },
+    problem: function () { return problem ? t(problem === "key" ? "jf_err_key" : problem === "user" ? "jf_err_user" : problem === "http" ? "jf_err_http" : "jf_err_net") : ""; }, fb: fb, updated: function () { return lastUpdate; },
     refresh: function (force) { refresh(force); } };
 })();

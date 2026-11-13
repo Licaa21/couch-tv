@@ -1294,7 +1294,7 @@
     if (NIGHT) {
       // the row shows while someone has a show on the go, or while a song plays
       var anyone = KW_ON && PEOPLE.some(function (p) { return (data.showsBy[p.id] || []).length; });
-      $("shelf-section").classList.toggle("empty", !anyone && !on);
+      $("shelf-section").classList.toggle("empty", !anyone && !on && !jfRowNote());
       $("np-slot").classList.toggle("on", on);
     }
     if (!on) { el.innerHTML = ""; return; }
@@ -2077,6 +2077,11 @@
     var im = el && el.querySelector ? el.querySelector("img[data-src]") : null;
     if (im) { im.src = im.getAttribute("data-src"); im.removeAttribute("data-src"); }
   }
+  function jfRowNote() {
+    var M = window.MoonfinTV;
+    if (!M || !KW_ON) return "";
+    return M.server() ? M.problem() : t("jf_row_setup");
+  }
   function renderShelf() {
     var track = $("shelf");
     data.shows = KW_ON ? (data.showsBy[who] || []).slice(0, KEEP_MAX) : [];
@@ -2095,12 +2100,13 @@
     // nobody has anything on the go: no empty box, the photo has the space (unless Now playing
     // is up at night). The people switcher stays: with nothing yet (Netflix tells Android nothing on
     // some TVs, issue #23) it is the only way to say who is watching before anything is played.
-    $("shelf-section").classList.toggle("empty", !anyone && !(NIGHT && npVisible()));
+    var jfNote = jfRowNote();   // the Samsung app: not set up yet, or why the Jellyfin row is empty
+    $("shelf-section").classList.toggle("empty", !anyone && !jfNote && !(NIGHT && npVisible()));
     renderPeople();
     if (!KW_ON) { track.innerHTML = ""; shelfEls = []; return; }   // row switched off: nothing to draw, the section is closed up
     if (!data.shows.length) {
       var name = PEOPLE[whoIndex()].name;
-      track.innerHTML = '<p class="shelf-none">' + esc(peopleCount() < 2 ? t("nothing_yet") : t("nothing_for", { name: name })) + "</p>";
+      track.innerHTML = '<p class="shelf-none">' + esc(jfNote || (peopleCount() < 2 ? t("nothing_yet") : t("nothing_for", { name: name }))) + "</p>";
       shelfEls = [];
       return;
     }
@@ -2214,8 +2220,12 @@
     f.removeChild(m);
     var fs = parseFloat(getComputedStyle(c).fontSize) || 0, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") ? 100000 : sec.getBoundingClientRect().top;
-    if (document.documentElement.classList.contains("cp-open")) rowTop = fitRowTop;   // the widgets page is up: the row has scrolled away
-    else fitRowTop = rowTop;
+    if (document.documentElement.classList.contains("cp-open")) {   // the widgets page is up: the row has gone, the widgets are in its place
+      var wcard = document.querySelector("#cp .cp-wx");
+      rowTop = wcard ? Math.min(fitRowTop, wcard.getBoundingClientRect().top) : fitRowTop;
+      var ahead = document.querySelector("#cp-apps .cpa-head");   // the Apps list is up: its heading is the top edge
+      if (ahead) rowTop = Math.min(rowTop, ahead.getBoundingClientRect().top);
+    } else fitRowTop = rowTop;
     var target = rowTop - 0.6 * rem, need = base + 0.01 * fs - target;   // need: how far the digits reach into the row
     var dy = 0, k = 1;
     if (need > 0) {
@@ -2536,7 +2546,7 @@
       data.shows = (data.showsBy[who] || []).slice(0, KEEP_MAX);
       renderShelf();
       if (!data.shows.length) {
-        $("shelf-section").classList.add("empty");
+        if (!jfRowNote()) $("shelf-section").classList.add("empty");
         zone = "grid";
         g = 0;
       } else {
@@ -4221,6 +4231,30 @@
     if (SET.sub) { SET.keyFocus = SET.sub.back; SET.sub = SET.sub.parent || null; return; }
     SET.col = "secs"; SET.keyFocus = null;
   }
+  // Up or Down on a row: move the highlight on the list that is already drawn (rebuilding every row for each press made a
+  // held key lag and run past the screen), and keep the row in view. False when the list is not the one drawn.
+  function moveRowFocus(rows, was) {
+    var box = $("set-rows"), kids = box.children;
+    if (kids.length !== rows.length || !kids[was] || !kids[SET.ri]) return false;
+    kids[was].classList.remove("focus");
+    kids[SET.ri].classList.add("focus");
+    var cur = rows[SET.ri];
+    $("set-hint").textContent = cur && cur.move ? t("hint_rows_move") : cur && cur.adjust ? t("hint_slider") : t("hint_rows");
+    keepInView(box, kids[SET.ri]);
+    return true;
+  }
+  // keep the focused row well inside the list (a quarter of it from either edge), scrolling only when it gets closer
+  function keepInView(box, f) {
+    var top = f.offsetTop, bottom = top + f.offsetHeight, view = box.clientHeight, edge = view / 4;
+    var want = box.scrollTop;
+    if (top - edge < want) want = Math.max(0, top - edge);
+    else if (bottom + edge > want + view) want = bottom + edge - view;
+    if (want === box.scrollTop) return;
+    // at once, never a smooth scroll: an earlier one still running would carry the list away from this row
+    box.style.scrollBehavior = "auto";
+    box.scrollTop = want;
+    box.style.scrollBehavior = "";
+  }
   function setMove(dx, dy) {
     var rows = rowsNow();
     if (SET.lift) {
@@ -4232,6 +4266,7 @@
       renderSettings();
       return;
     }
+    var hadConfirm = !!SET.confirm;   // its "Remove?" text goes back to the name, which needs the list drawn again
     SET.confirm = null;
     if (SET.col === "secs") {
       if (dy) {
@@ -4239,8 +4274,11 @@
         if (n !== SET.sec) { SET.sec = n; SET.sub = null; SET.msg = ""; SET.keyFocus = null; SET.ri = 0; }
       } else if (dx > 0) enterRows();
     } else if (dy) {
+      var was = SET.ri;
       SET.ri = stepRow(rows, SET.ri, dy);
       SET.keyFocus = rows[SET.ri] ? rows[SET.ri].key : null;
+      if (SET.ri === was && !hadConfirm) return;
+      if (!hadConfirm && moveRowFocus(rows, was)) return;   // only the highlight moved: no rebuild of the whole list
     } else if (dx && rows[SET.ri] && rows[SET.ri].adjust) {
       rows[SET.ri].adjust(document.documentElement.dir === "rtl" ? -dx : dx);
       SET.keyFocus = rows[SET.ri].key;
@@ -4351,11 +4389,7 @@
     // when it gets closer, so short lists and their headings never move
     var f = box.querySelector(".srow.focus");
     if (!f) { box.scrollTop = 0; return; }
-    var top = f.offsetTop, bottom = top + f.offsetHeight, view = box.clientHeight, edge = view / 4;
-    if (SET.fast) box.style.scrollBehavior = "auto";
-    if (top - edge < box.scrollTop) box.scrollTop = Math.max(0, top - edge);
-    else if (bottom + edge > box.scrollTop + view) box.scrollTop = bottom + edge - view;
-    if (SET.fast) box.style.scrollBehavior = "";
+    keepInView(box, f);
   }
   function initSettings() {
     $("set-input").addEventListener("input", function () { if (SET.typing && SET.typing.live) SET.typing.live(this.value); });
@@ -4615,7 +4649,7 @@
     // list follows without its smooth scroll.
     SET.fast = false;
     if (zone === "settings" && e.repeat && !SET.typing && arrowOf(e)) {
-      if (lastKeyAt - lastRepeatAt < 110) { e.preventDefault(); return; }
+      if (lastKeyAt - lastRepeatAt < 45) { e.preventDefault(); return; }
       lastRepeatAt = lastKeyAt;
       SET.fast = true;
     }
