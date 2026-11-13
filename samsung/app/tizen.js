@@ -128,31 +128,37 @@
   }
 
   // Any input or live TV, the same way: the picked source full screen in front of this app.
-  function showSource(match, label) {
-    function failed(step, e) { skyOn = false; skyNote(label + " " + t("src_failed") + " (" + step + "). " + errText(e)); }
-    try {
-      tizen.systeminfo.getPropertyValue("VIDEOSOURCE", function (info) {
-        var list = (info && info.connected) || [], src = null;
-        list.forEach(function (s) { if (!src && match(s)) src = s; });
-        if (!src) {
-          failed(t("src_not_connected"), t("src_lists") + " " +
-            (list.map(function (s) { return s.type + " " + s.number; }).join(", ") || "-"));
-          return;
-        }
+  // The TV's "connected" list is only a help: a 2021 Q67A listed just "TV 1" while a PS5 was on HDMI 2 (and
+  // opened by the TV's own HDMI 2 button). So when the list has no such source it is made from the type and
+  // port and handed to the TV window anyway; the TV says no if it really cannot.
+  function showSource(type, number, label) {
+    var listed = "";
+    function failed(step, e) {
+      skyOn = false;
+      skyNote(label + " " + t("src_failed") + " (" + step + "). " + errText(e) + (listed ? " " + t("src_lists") + " " + listed : ""));
+    }
+    function go(src) {
+      try {
         tizen.tvwindow.setSource(src, function () {
           try {
             tizen.tvwindow.show(function () { skyOn = true; }, function (e) { failed("show", e); },
               ["0", "0", "100%", "100%"], "MAIN", "FRONT");
           } catch (e) { failed("show", e); }
         }, function (e) { failed("setSource", e); });
-      }, function (e) { failed("list inputs", e); });
-    } catch (e) { failed("start", e); }
+      } catch (e) { failed("setSource", e); }
+    }
+    try {
+      tizen.systeminfo.getPropertyValue("VIDEOSOURCE", function (info) {
+        var list = (info && info.connected) || [], src = null;
+        listed = list.map(function (s) { return s.type + " " + s.number; }).join(", ");
+        list.forEach(function (s) { if (!src && s.type === type && (type === "TV" || s.number === number)) src = s; });
+        go(src || { type: type, number: type === "TV" ? 1 : number });
+      }, function () { go({ type: type, number: type === "TV" ? 1 : number }); });
+    } catch (e) { go({ type: type, number: type === "TV" ? 1 : number }); }
     return true;
   }
 
-  function openSky() {
-    return showSource(function (s) { return s.type === "HDMI" && s.number === SKY_PORT; }, "Sky");
-  }
+  function openSky() { return showSource("HDMI", SKY_PORT, "Sky"); }
 
   // ---------- the Input button: live TV and the HDMI ports, shown by the TV window ----------
   // Ids are "tv" or "<type>:<port>" ("HDMI:2"). HDMI 1 to 4 are always listed; further ports and the
@@ -180,9 +186,28 @@
   }
 
   function openInput(id) {
-    var p = String(id).split(":"), live = p[0] === "tv", num = parseInt(p[1], 10);
-    return showSource(function (s) { return live ? s.type === "TV" : s.type === p[0] && s.number === num; },
-      live ? t("tv_live") : p[0] + " " + num);
+    var p = String(id).split(":"), live = p[0] === "tv";
+    return live ? showSource("TV", 0, t("tv_live")) : showSource(p[0], parseInt(p[1], 10), p[0] + " " + p[1]);
+  }
+
+  // ---------- "TV settings" in the gear menu ----------
+  // Tizen gives a web app no call for the TV's own settings, so this looks for the Settings app in this
+  // TV's apps list (by its name or its id) and tries each, the visible ones first; if none opens it says so.
+  var SETTINGS_NAME = /^(settings?|setări|setari|einstellungen|paramètres|réglages|impostazioni|ajustes|configuración|ayarlar|instellingen)$/i;
+  function openTvSettings() {
+    var found = tizenApps.filter(function (a) {
+      return a.id !== SELF && (SETTINGS_NAME.test(String(a.name || "").trim()) || /(^|[.\-_])settings?([.\-_]|$)/i.test(a.id || ""));
+    }).sort(function (a, b) { return (b.show !== false) - (a.show !== false); }).map(function (a) { return a.id; });
+    var ids = found.slice();
+    ["org.tizen.settings-tv-ref", "org.tizen.tv-settings", "org.tizen.setting"].forEach(function (g) { if (ids.indexOf(g) < 0) ids.push(g); });
+    (function attempt(i) {
+      if (i >= ids.length) { skyNote(t("tv_settings_none") + (found.length ? " (" + found.slice(0, 3).join(", ") + ")" : "")); return; }
+      try {
+        tizen.application.launch(ids[i], function () { send("log", "settings: launched " + ids[i]); },
+          function () { attempt(i + 1); });
+      } catch (e) { attempt(i + 1); }
+    })(0);
+    return true;
   }
 
   // Runs before app.js's own keys: with Sky on screen, the home must not move behind it.
@@ -206,6 +231,7 @@
   function launch(pkg) {
     if (pkg === SKY) return openSky();
     if (pkg === LIVE) return openInput("tv");
+    if (pkg === "com.android.tv.settings") return openTvSettings();   // the gear menu's "TV settings"
     var a = byPkg[pkg], m = MAP[pkg];
     var ids = a ? [a.id] : [];
     if (m) (m.ids || []).concat(m.app ? [m.app] : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
@@ -240,6 +266,18 @@
     if (a && a.iconPath) return /^[a-z]+:/.test(a.iconPath) ? a.iconPath : "file://" + a.iconPath;
     return null;
   }
+
+  // The splash (build.py puts it first in index.html) covers the page until the home has drawn its apps, so
+  // there is a spinner, not a black screen and a lone "Keep watching", while the page loads or reloads.
+  (function () {
+    var splash = document.getElementById("splash"), t0 = Date.now();
+    if (!splash) return;
+    (function wait() {
+      if (!document.querySelector(".tile.app") && Date.now() - t0 < 8000) { setTimeout(wait, 80); return; }
+      splash.className = "out";
+      setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 320);
+    })();
+  })();
 
   window.TVOS = {
     // the TV tile's name is said in the language chosen, which is set after this file loads

@@ -73,3 +73,15 @@
 #jf-look .jf-sel b { display: block; font-size: 1.375rem; line-height: 1.875rem; font-weight: 600; }
 #jf-look .jf-sel.on { background: #fff; color: #111; }
 #jf-look small { display: block; margin-top: 0.75rem; font-size: 1rem; opacity: 0.6; }
+
+/* A built-in profile picture (avatars.js) fills the round avatar. */
+.avatar.pic { padding: 0; overflow: hidden; background: none !important; }
+.avatar.pic svg { display: block; width: 100%; height: 100%; }
+
+/* Inputs and buttons take the app's font (a form control does not inherit it by itself), so Romanian letters match. */
+#jf-setup input, #jf-setup button { font-family: inherit; }
+
+/* Lighter home (the Samsung default): the Jellyfin cards open at once, with no soft shadows. */
+html.lighter .jcard, html.lighter .jface { transition: none; }
+html.lighter .jface { box-shadow: none; }
+html.lighter .jcard.focus .jface, html.lighter .jpeek .jcard:first-child .jface { box-shadow: 0 0 0 0.1875rem #fff; }

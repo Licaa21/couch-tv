@@ -1,10 +1,10 @@
 // Keep watching from your own Jellyfin server, opened in the Moonfin app on this TV. No computer.
 // Nothing is baked into the app: the server address, API key and user name are typed on the TV
-// (the Jellyfin tile) and kept in this app's own storage on the TV. Loads before tizen.js, which
+// (Home settings, Jellyfin) and kept in this app's own storage on the TV. Loads before tizen.js, which
 // hands the home its rows (TVOS.watchNext) and opens a card (TVOS.openWatchNext) through this.
 (function () {
   "use strict";
-  var CFG = "couch.jf", ROWS = "couch.jf.rows", MOON = "MoonfinApp.moonfin", MAX = 10;
+  var CFG = "couch.jf", ROWS = "couch.jf.rows", MOON = "MoonfinApp.moonfin", MAX = 20, PER = 12;
   var busy = false, lastTry = 0;
 
   function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
@@ -64,7 +64,7 @@
     else if (it.ImageTags && it.ImageTags.Thumb) { type = "Thumb"; tag = it.ImageTags.Thumb; }
     else if (it.ImageTags && it.ImageTags.Primary) { type = "Primary"; tag = it.ImageTags.Primary; }
     else return null;
-    return cfg.server + "/Items/" + id + "/Images/" + type + "?fillWidth=640&quality=80&tag=" + tag;
+    return cfg.server + "/Items/" + id + "/Images/" + type + "?fillWidth=480&quality=80&tag=" + tag;
   }
 
   // The tall cover: a film's own, a show's for its episodes. Cards show it until they are focused.
@@ -72,7 +72,7 @@
     var id = it.Id, tag;
     if (it.Type === "Episode") { id = it.SeriesId; tag = it.SeriesPrimaryImageTag; }
     else tag = it.ImageTags && it.ImageTags.Primary;
-    return tag && id ? cfg.server + "/Items/" + id + "/Images/Primary?fillHeight=320&quality=85&tag=" + tag : null;
+    return tag && id ? cfg.server + "/Items/" + id + "/Images/Primary?fillHeight=260&quality=85&tag=" + tag : null;
   }
 
   // One Jellyfin item as a Keep watching card. "jf" is what Moonfin's own Smart Hub tiles carry.
@@ -90,13 +90,35 @@
     };
   }
 
-  // The current endpoint first, the old one for an older server.
+  // Continue watching: the current endpoint first, the old one for an older server.
   function resume(cfg, done) {
-    var q = "Limit=" + MAX + "&MediaTypes=Video&EnableUserData=true&EnableImageTypes=Backdrop,Thumb,Primary";
+    var q = "Limit=" + PER + "&MediaTypes=Video&EnableUserData=true&EnableImageTypes=Backdrop,Thumb,Primary";
     get(cfg, "/UserItems/Resume?userId=" + cfg.uid + "&" + q, function (err, j) {
       if (!err) return done(null, j);
       get(cfg, "/Users/" + cfg.uid + "/Items/Resume?" + q, done);
     });
+  }
+
+  // Next up: the next episode of each show you are following, one you have not started yet.
+  function nextUp(cfg, done) {
+    get(cfg, "/Shows/NextUp?UserId=" + cfg.uid + "&Limit=" + PER + "&EnableUserData=true&EnableImageTypes=Backdrop,Thumb,Primary", done);
+  }
+
+  // The two rows as one, the way Moonfin's own home does it: what is in progress, then the next episodes
+  // (an episode already in progress is not listed twice), newest watched first. A next episode has no play
+  // date of its own, so it takes the date its show was last watched; ones with no date go last.
+  function combine(resumeItems, nextItems) {
+    var seen = {}, lastOf = {};
+    resumeItems.forEach(function (it) {
+      var d = it.UserData && it.UserData.LastPlayedDate;
+      seen[it.Id] = true;
+      if (it.SeriesId && d && (!lastOf[it.SeriesId] || d > lastOf[it.SeriesId])) lastOf[it.SeriesId] = d;
+    });
+    var all = resumeItems.concat(nextItems.filter(function (it) { return !seen[it.Id]; })).map(function (it, i) {
+      return { it: it, i: i, d: (it.UserData && it.UserData.LastPlayedDate) || lastOf[it.SeriesId] || "" };
+    });
+    all.sort(function (a, b) { return a.d && b.d ? (a.d < b.d ? 1 : a.d > b.d ? -1 : a.i - b.i) : a.d ? -1 : b.d ? 1 : a.i - b.i; });
+    return all.map(function (x) { return x.it; }).slice(0, MAX);
   }
 
   function refresh(force, done) {
@@ -107,14 +129,18 @@
       if (err) { busy = false; if (done) done(err); return; }
       write(CFG, c);
       resume(c, function (err2, j) {
-        busy = false;
-        if (err2) { if (done) done(err2); return; }
-        var app = { package: moonId(), name: "Moonfin" };
-        var out = JSON.stringify((j.Items || []).slice(0, MAX).map(function (it) { return card(c, it, app); }));
-        var changed = out !== localStorage.getItem(ROWS);
-        try { localStorage.setItem(ROWS, out); } catch (e) {}
-        if (changed && window.tv && window.tv.refresh) window.tv.refresh();
-        if (done) done(null, JSON.parse(out).length);
+        if (err2) { busy = false; if (done) done(err2); return; }
+        // a server with no Next up (or one that fails) still shows what is in progress
+        nextUp(c, function (err3, n) {
+          busy = false;
+          var app = { package: moonId(), name: "Moonfin" };
+          var items = combine(j.Items || [], err3 || !n ? [] : n.Items || []);
+          var out = JSON.stringify(items.map(function (it) { return card(c, it, app); }));
+          var changed = out !== localStorage.getItem(ROWS);
+          try { localStorage.setItem(ROWS, out); } catch (e) {}
+          if (changed && window.tv && window.tv.refresh) window.tv.refresh();
+          if (done) done(null, items.length);
+        });
       });
     });
   }
@@ -199,7 +225,7 @@
     box.id = "jf-setup";
     function field(id, label, value, hint) {
       return '<label>' + esc(label) + '<input id="' + id + '" type="text" value="' + esc(value || "") + '" placeholder="' + esc(hint || "") +
-        '" autocomplete="off" autocapitalize="off" spellcheck="false"></label>';
+        '" autocomplete="off" autocapitalize="off" spellcheck="false" readonly></label>';
     }
     box.innerHTML = '<div class="jf-panel"><h2>' + esc(t("jf_title")) + '</h2><p>' + esc(t("jf_note")) + '</p>' +
       field("jf-server", t("jf_server"), cfg.server, "http://your-server:8096") +
@@ -231,11 +257,39 @@
       });
     }
     function forget() { write(CFG, null); write(ROWS, null); if (window.tv && window.tv.refresh) window.tv.refresh(); close(); }
-    // Runs before the home's own keys: the home must not move behind this screen.
+    // A box is read-only until OK is pressed on it, so moving over it does not raise the TV's keyboard.
+    // Pressing OK makes it editable and the keyboard opens; its Done (or Back) puts it back.
+    var editing = null, reopening = false;
+    function edit(el) {
+      editing = el; reopening = true;
+      el.readOnly = false;
+      el.blur(); el.focus();   // a fresh focus on an editable box is what brings the keyboard up
+      reopening = false;
+      try { el.setSelectionRange(el.value.length, el.value.length); } catch (e) {}
+    }
+    function finish() {
+      var el = editing;
+      if (!el) return;
+      editing = null; reopening = true;
+      el.readOnly = true;
+      el.blur(); el.focus();
+      reopening = false;
+    }
+    for (var n = 0; n < 3; n++) els[n].addEventListener("blur", function () { if (editing === this && !reopening) finish(); });
+    // Runs before the home's own keys: the home must not move behind this screen. Typing keys are left
+    // alone (Samsung says not to stop them); 65376 and 65385 are the keyboard's Done and Cancel.
     function keys(e) {
       var i = els.indexOf(document.activeElement), k = e.keyCode;
+      if (editing) {
+        if (k === 13 || k === 65376 || k === 65385 || k === 10009 || k === 27) { finish(); if (k !== 13 && k !== 65376) e.preventDefault(); }
+        else if (k === 38 || k === 40) { finish(); e.preventDefault(); els[Math.max(0, Math.min(els.length - 1, i + (k === 40 ? 1 : -1)))].focus(); }
+        e.stopImmediatePropagation();
+        return;
+      }
       if (k === 10009 || k === 27) { e.preventDefault(); close(); }
       else if (k === 38 || k === 40) { e.preventDefault(); els[Math.max(0, Math.min(els.length - 1, (i < 0 ? 0 : i) + (k === 40 ? 1 : -1)))].focus(); }
+      else if ((k === 37 || k === 39) && i >= 3) { e.preventDefault(); els[i === 3 ? 4 : 3].focus(); }   // Save and Forget sit side by side
+      else if (k === 13 && i >= 0 && i < 3) { e.preventDefault(); edit(els[i]); }
       else if (k === 13 && i === 3) { e.preventDefault(); save(); }
       else if (k === 13 && i === 4) { e.preventDefault(); forget(); }
       e.stopImmediatePropagation();

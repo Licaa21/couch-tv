@@ -1914,6 +1914,8 @@
     return PALETTE[h % PALETTE.length];
   }
   function avatarHTML(p) {
+    var pic = p.pic && window.AVATARS ? window.AVATARS.html(p.pic) : "";   // a built-in picture (avatars.js)
+    if (pic) return '<span class="avatar pic">' + pic + "</span>";
     return '<span class="avatar" style="background:' + esc(colourOf(p)) + '">' + esc((p.name || "?").trim().charAt(0).toUpperCase()) + "</span>";
   }
   function whoIndex() { return Math.max(0, PEOPLE.map(function (p) { return p.id; }).indexOf(who)); }
@@ -2060,7 +2062,12 @@
   }
 
   // Keep watching shows up to ten per person; the row slides along under the remote.
-  var KEEP_MAX = 10;
+  var KEEP_MAX = window.MoonfinTV ? 20 : 10;   // the Samsung app's Continue watching and Next up are one row
+  // The Jellyfin row loads a card's backdrop only once the card is focused.
+  function loadBackdrop(el) {
+    var im = el && el.querySelector ? el.querySelector("img[data-src]") : null;
+    if (im) { im.src = im.getAttribute("data-src"); im.removeAttribute("data-src"); }
+  }
   function renderShelf() {
     var track = $("shelf");
     data.shows = KW_ON ? (data.showsBy[who] || []).slice(0, KEEP_MAX) : [];
@@ -2091,15 +2098,17 @@
     if (jrow) {
       // Moonfin's look: a poster per title with its name underneath; the focused one opens out into its backdrop
       track.innerHTML = data.shows.map(function (it) {
-        var pic = slim(it.poster || it.backdrop), wide = slim(it.backdrop || it.poster);
+        var pic = slim(it.poster || it.backdrop), wide = slim(it.backdrop || it.poster), lay = jl ? jl.layout : "open";
         var sub = it.season && it.episode ? "S" + it.season + " E" + it.episode + (it.episode_title ? "  ·  " + it.episode_title : "") : "";
         return '<div class="tile jcard"><div class="jface">' +
-          (pic ? '<img class="jp" src="' + esc(pic) + '" alt="" decoding="async">' : "") +
-          (wide ? '<img class="jb" src="' + esc(wide) + '" alt="" decoding="async">' : "") +
+          (pic && lay !== "wide" ? '<img class="jp" src="' + esc(pic) + '" alt="" decoding="async">' : "") +
+          (wide && lay === "wide" ? '<img class="jb" src="' + esc(wide) + '" alt="" decoding="async">' : "") +
+          (wide && lay === "open" ? '<img class="jb" data-src="' + esc(wide) + '" alt="" decoding="async">' : "") +
           (it.progress ? '<span class="jbar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "") +
           '</div><div class="jcap"><b>' + esc(it.title) + "</b><i>" + esc(sub) + "</i></div></div>";
       }).join("");
       shelfEls = Array.prototype.slice.call(track.children);
+      if (jsec.classList.contains("jpeek")) loadBackdrop(shelfEls[0]);   // the look panel shows the first card as focused
       return;
     }
     if (NIGHT) {
@@ -2695,6 +2704,7 @@
     }
     if (zone === "shelf" && shelfEls[s]) {
       shelfEls[s].classList.add("focus");
+      loadBackdrop(shelfEls[s]);
       scrollShelf();
       if (NIGHT) return;   // the cards carry the titles; the photo stays put under the clock
       setBg(data.shows[s].backdrop || data.shows[s].poster, true);
@@ -2843,8 +2853,9 @@
         g -= GRID_COLS;
       } else if (row < lastRow) {
         g = Math.min(g + GRID_COLS, gridEls.length - 1);
-      } else if (dy > 0 && !expanded && gridItems.some(function (x) { return x.kind === "more"; })) {
+      } else if (dy > 0 && !window.MoonfinTV && !expanded && gridItems.some(function (x) { return x.kind === "more"; })) {
         // Down from the bottom row of the dock opens the full apps view (#98), on the same app
+        // (the Samsung app leaves it out: More apps is the tile at the end of the dock)
         dockBack = gridKey(gridItems[g]);
         expanded = true; renderGrid();
         var at = -1;
@@ -3739,10 +3750,36 @@
           { kind: "input", key: "p-name", label: t("person_name"), value: p.name, act: function () {
             startTyping({ label: t("person_rename_type"), value: p.name, submit: function (v) { renamePerson(id, v); } });
           } },
+          window.AVATARS ? { kind: "nav", key: "p-pic", label: t("person_pic"), avatar: p, sub: p.pic ? t("av_" + p.pic) : t("person_pic_letter"),
+            act: function () { openPersonPic(id); } } : null,
           { kind: "action", key: "p-remove", label: t("person_remove", { name: p.name }), danger: true, act: function () { removePerson(id); } }
-        ];
+        ].filter(Boolean);
       } };
     SET.keyFocus = "p-name";
+  }
+  // The built-in pictures (avatars.js) as a list; Back returns to the person.
+  function openPersonPic(id) {
+    var parent = SET.sub, now = personById(id);
+    SET.sub = { back: "p-pic", parent: parent, crumb: t("sec_people"),
+      title: function () { return t("person_pic"); },
+      rows: function () {
+        var p = personById(id);
+        if (!p) return [];
+        var rows = [{ kind: "choice", key: "pic:letter", label: t("person_pic_letter"), avatar: { id: p.id, name: p.name, colour: p.colour }, checked: !p.pic,
+          act: function () { setPersonPic(id, null); } }];
+        window.AVATARS.ids.forEach(function (a) {
+          rows.push({ kind: "choice", key: "pic:" + a, label: t("av_" + a), avatar: { id: p.id, name: p.name, pic: a }, checked: p.pic === a,
+            act: function () { setPersonPic(id, a); } });
+        });
+        return rows;
+      } };
+    SET.keyFocus = "pic:" + ((now && now.pic) || "letter");
+  }
+  function setPersonPic(id, pic) {
+    var p = personById(id);
+    if (!p) return;
+    if (pic) p.pic = pic; else delete p.pic;
+    savePeopleList();
   }
   function cleanName(v) { return String(v || "").replace(/\s+/g, " ").trim().slice(0, 40); }
   function newPersonId(name, list) {
@@ -3758,7 +3795,7 @@
   function savePeopleList() {
     var list = NOBODY ? [] : PEOPLE.map(function (p) {
       var o = { id: p.id, name: p.name };
-      ["colour", "kid", "guest"].forEach(function (k) { if (p[k] != null) o[k] = p[k]; });
+      ["colour", "kid", "guest", "pic"].forEach(function (k) { if (p[k] != null) o[k] = p[k]; });
       return o;
     });
     keep("tvhome.people.list", { people: list, pending: true });
@@ -4031,9 +4068,21 @@
     try { $("set-input").blur(); } catch (e) {}
     renderSettings();
   }
+  // Done on a TV keyboard sends no Enter: Samsung sends key 65376 (Done) and 65385 (Cancel; on Tizen 6 and
+  // newer the remote's Back and Up arrive as Cancel) and then closes the keyboard, which takes the focus
+  // with it. So a name typed in was lost. Done, or the box losing focus with a change in it, now saves.
+  function finishTyping() {
+    var spec = SET.typing, v = $("set-input").value;
+    if (!spec) return;
+    stopTyping();
+    if (v.trim() !== String(spec.value || "").trim()) spec.submit(v);
+    if (zone === "settings") renderSettings();
+  }
   function typingKey(e) {
     if (!SET.typing || zone !== "settings") return false;
     var inp = $("set-input");
+    if (e.keyCode === 65376) { finishTyping(); return true; }
+    if (e.keyCode === 65385) { stopTyping(); return true; }
     if (document.activeElement !== inp) { stopTyping(); return false; }   // the box lost the keys
     if (e.key === "Enter" || e.keyCode === 13) {
       // Nothing typed yet: this OK is the remote asking for the TV's keyboard (a WebView raises it
@@ -4059,7 +4108,7 @@
     SET.col = "rows"; SET.ri = i; SET.keyFocus = rows[i].key;
   }
   function leaveRows() {
-    if (SET.sub) { SET.keyFocus = SET.sub.back; SET.sub = null; return; }
+    if (SET.sub) { SET.keyFocus = SET.sub.back; SET.sub = SET.sub.parent || null; return; }
     SET.col = "secs"; SET.keyFocus = null;
   }
   function setMove(dx, dy) {
@@ -4198,6 +4247,12 @@
   }
   function initSettings() {
     $("set-input").addEventListener("input", function () { if (SET.typing && SET.typing.live) SET.typing.live(this.value); });
+    $("set-input").addEventListener("blur", function () {
+      setTimeout(function () {
+        var spec = SET.typing;
+        if (spec && zone === "settings" && document.activeElement !== $("set-input") && $("set-input").value.trim() !== String(spec.value || "").trim()) finishTyping();
+      }, 0);
+    });
   }
 
   // ---------------- keys: any normal TV remote, keyboard or game controller ----------------

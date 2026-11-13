@@ -27,6 +27,13 @@ sys.path.insert(0, os.path.join(ROOT, "bridge"))
 import apps  # noqa: E402
 import config  # noqa: E402
 
+# what covers the page while it loads (inline, so it paints before app.css arrives)
+SPLASH_CSS = ("html,body{background:#0b0d12}#splash{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;"
+              "background:#0b0d12;display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .3s}"
+              "#splash.out{opacity:0;pointer-events:none}#splash i{width:60px;height:60px;border:6px solid rgba(255,255,255,.16);"
+              "border-top-color:#fff;border-radius:50%;animation:couch-spin .9s linear infinite}"
+              "@keyframes couch-spin{to{transform:rotate(360deg)}}")
+
 WEB = os.path.join(ROOT, "tv-home", "web")
 LOGOS = os.path.join(ROOT, "remote", "src", "app-logos")
 ICON = os.path.join(ROOT, "remote", "public", "icons", "icon-512.png")
@@ -74,9 +81,15 @@ def main():
     if css not in html:
         raise SystemExit("tv-home/web/index.html no longer loads app.css; update samsung/build.py")
     html = html.replace(css, css + '\n<link rel="stylesheet" href="tizen.css">')
+    # a spinner from the first paint (tizen.js removes it once the home has drawn its apps), so loading and
+    # reloading never show a black screen with a lone "Keep watching"
+    if "<head>" not in html or "<body>" not in html:
+        raise SystemExit("tv-home/web/index.html no longer has plain <head> and <body> tags; update samsung/build.py")
+    html = html.replace("<head>", "<head>\n<style>" + SPLASH_CSS + "</style>", 1)
+    html = html.replace("<body>", '<body>\n<div id="splash"><i></i></div>', 1)
     html = html.replace(tag, '<script src="$WEBAPIS/webapis/webapis.js"></script>\n'
                              '<script src="settings.js"></script>\n<script src="tizen-apps.js"></script>\n'
-                             '<script src="moonfin.js"></script>\n<script src="tizen.js"></script>\n' + tag)
+                             '<script src="avatars.js"></script>\n<script src="moonfin.js"></script>\n<script src="tizen.js"></script>\n' + tag)
     with open(index, "w") as f:
         f.write(html)
 
@@ -86,6 +99,9 @@ def main():
     for tv in pub.get("tvs", []):
         if "input" not in (tv.get("quick") or []):
             tv["quick"] = (tv.get("quick") or []) + ["input"]
+    # Lighter home (no blur, no soft shadows, a still photo, smaller pictures) is on unless config.json says
+    # otherwise: a Samsung's browser is slow, and it can be switched off in Home settings, Look
+    pub.setdefault("home", {}).setdefault("lighter", True)
     with open(os.path.join(stage, "config.js"), "w") as f:
         f.write("(function () {\n  var t = null;\n"
                 "  try { t = localStorage.getItem(\"couch.configjs\"); } catch (e) {}\n"
