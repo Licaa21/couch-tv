@@ -74,15 +74,20 @@
     if (SKY_PORT) shown.unshift({ package: SKY, label: "Sky" });
     shown.unshift({ package: WX, label: "Weather" });
     shown.unshift({ package: LIVE, label: "TV" });
-    var sa = storeApp();   // Samsung's Apps: a tile like the others, in the dock after TV and Weather (Home settings can move it)
-    shown.splice(2, 0, { package: APPSTORE, label: sa && sa.name ? sa.name : "Apps" });
+    var sa = storeApp();   // Samsung's Apps: an app like the others (listed by the TV, opened with the id the TV lists), after TV and Weather
+    if (sa && !byPkg[sa.id]) byPkg[sa.id] = sa;
+    shown.splice(2, 0, { package: storePkg(), label: sa && sa.name ? sa.name : "Apps" });
   }
-  // Samsung's own Apps (its store): its id is com.samsung.tv.store (the id Free My TV leaves out of the system apps it hides). Only that
-  // id is launched: guessed ids made the TV open another app. It is the first tile of the Apps menu (panel.js) and can be put in the dock.
-  var APPSTORE = "local.appstore", STORE_ID = "com.samsung.tv.store";
+  // Samsung's own Apps (its store). Free My TV lists it like any other Samsung app and opens it with the id the TV gives it (it keeps
+  // com.samsung.tv.store out of its hidden system apps), so this does the same: that id, found in the TV's list by id or by its name, and
+  // opened by the one launch every other app uses. No guessed ids (they made the TV open YouTube).
+  var STORE_ID = "com.samsung.tv.store", STORE_NAME = /^(apps|aplica[țtţ]ii|anwendungen|applications|aplicaciones|applicazioni|toepassingen|aplikacje|uygulamalar|приложения)$/i;
   function storeApp() {
-    return tizenApps.filter(function (a) { return a.id === STORE_ID; })[0] || null;
+    var list = tizenApps.filter(function (a) { return a.id !== SELF && !STORE.test(a.packageId || ""); });
+    return list.filter(function (a) { return a.id === STORE_ID; })[0] ||
+      list.filter(function (a) { return STORE_NAME.test(String(a.name || "").trim()) && /^(com\.samsung|org\.tizen)\./.test(a.id || ""); })[0] || null;
   }
+  function storePkg() { var a = storeApp(); return a ? a.id : STORE_ID; }
   var SKY = "local.sky", LIVE = "local.tv", WX = "local.weather", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
   function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
   sortOut();
@@ -260,11 +265,6 @@
     if (pkg === LIVE) return openInput("tv");
     if (pkg === WX) { if (window.WeatherTV) window.WeatherTV.open(); return true; }
     if (pkg === "com.android.tv.settings") return openTvSettings();   // the gear menu's "TV settings"
-    if (pkg === APPSTORE) {
-      try { tizen.application.launch(STORE_ID, function () { send("log", "apps store opened"); }, function () { skyNote(t("store_none")); }); }
-      catch (e) { skyNote(t("store_none")); }
-      return true;
-    }
     var a = byPkg[pkg], m = MAP[pkg];
     var ids = a ? [a.id] : [];
     if (m) (m.ids || []).concat(m.app ? [m.app] : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
@@ -292,11 +292,6 @@
 
   function iconUrl(pkg) {
     if (pkg === SKY) return "logo-sky.png";
-    if (pkg === APPSTORE) {
-      var sa = storeApp();
-      if (sa && sa.iconPath) return /^[a-z]+:/.test(sa.iconPath) ? sa.iconPath : "file://" + sa.iconPath;
-      return tileIcon('<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>', "#ff6a3d");
-    }
     if (pkg === WX) return tileIcon('<circle cx="9" cy="9" r="3.4"/><path d="M9 2.5v1.6M9 13.9v1.6M2.5 9h1.6M15 9h1.6M4.4 4.4l1.1 1.1M12.5 12.5l1.1 1.1M13.6 4.4l-1.1 1.1M5.5 12.5l-1.1 1.1"/><path d="M9.5 20h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.4-1.2A4.1 4.1 0 0 0 9.5 20z"/>', "#2d7ff9");
     if (pkg === LIVE) return tileIcon('<rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/>', "#0a84ff");
     var m = MAP[pkg];
@@ -329,7 +324,7 @@
     launch: launch,
     iconUrl: iconUrl,
     version: function () { return S.version || ""; },   // Home settings > About
-    storeApp: function () { var a = storeApp(); return JSON.stringify({ package: APPSTORE, label: a ? a.name : "" }); },
+    storeApp: function () { var a = storeApp(); return JSON.stringify({ package: storePkg(), label: a ? a.name : "" }); },
     bannerUrl: function () { return null; },
     kept: function (k) { try { return localStorage.getItem("tvos." + k); } catch (e) { return null; } },
     keep: function (k, v) { try { localStorage.setItem("tvos." + k, v); } catch (e) {} },

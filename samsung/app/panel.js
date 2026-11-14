@@ -73,9 +73,9 @@
   function openApps() {
     var list = [];
     try { list = JSON.parse(window.TVOS.apps()); } catch (e) {}
-    list = list.filter(function (a) { return a.package.indexOf("local.") !== 0; });
     var store = null;   // Samsung's own Apps goes first, ahead of the A to Z
     try { store = window.TVOS.storeApp ? JSON.parse(window.TVOS.storeApp()) : null; } catch (e) {}
+    list = list.filter(function (a) { return a.package.indexOf("local.") !== 0 && !(store && a.package === store.package); });
     var loc = window.I18N ? window.I18N.locale() : "en";
     list.sort(function (a, b) { return String(a.label).localeCompare(String(b.label), loc, { sensitivity: "base" }); });
     var present = {};
