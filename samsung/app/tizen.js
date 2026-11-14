@@ -74,6 +74,8 @@
     if (SKY_PORT) shown.unshift({ package: SKY, label: "Sky" });
     shown.unshift({ package: WX, label: "Weather" });
     shown.unshift({ package: LIVE, label: "TV" });
+    var sa = storeApp();   // Samsung's Apps: a tile like the others, in the dock after TV and Weather (Home settings can move it)
+    shown.splice(2, 0, { package: APPSTORE, label: sa && sa.name ? sa.name : "Apps" });
   }
   // Samsung's own Apps (its store): found in this TV's list by its name (in a few languages) or its id, else tried by the ids it is
   // known to have had. It is the first tile of the Apps menu (panel.js) and is not in the dock.
