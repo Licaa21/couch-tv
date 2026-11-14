@@ -438,11 +438,11 @@
     });
     HIDDEN_TV = (Array.isArray(ST.hidden_apps) ? ST.hidden_apps : []).filter(function (p) { return typeof p === "string"; });
     SCENE_LIB = BUILT_IN.concat(myScenes(HOME.my_scenes));
+    SUN_SYNC = typeof ST.sun_sync === "boolean" ? ST.sun_sync : !!HOME.sun_sync;
     var st = sceneState();
-    SCENES = st.order.filter(function (id) { return st.off.indexOf(id) < 0; }).map(sceneById).filter(Boolean);
+    SCENES = st.order.filter(function (id) { return st.off.indexOf(id) < 0; }).map(sceneById).filter(function (x) { return x && (SUN_SYNC || !x.weather); });
     if (!SCENES.length) SCENES = [SCENE_LIB[0]];
     SCENE_MS = Math.max(5, parseInt(ST.scene_seconds || HOME.scene_seconds, 10) || 20) * 1000;
-    SUN_SYNC = typeof ST.sun_sync === "boolean" ? ST.sun_sync : !!HOME.sun_sync;
     var people = CFG.people || [{ id: "person1", name: "Person 1" }, { id: "person2", name: "Person 2" }];
     // people added, renamed or removed in Home settings with no bridge to keep them
     var lst = kept("tvhome.people.list");
@@ -683,7 +683,17 @@
     { id: "golden", photo: "scene-golden", fg: true, glass: true },
     { id: "water", photo: "scene-water", fg: false, glass: true, water: 0.55 },   // the underside of the surface
     { id: "fog", photo: "scene-fog", fg: true, glass: true },
-    { id: "dawn", photo: "scene-dawn", fg: true, glass: true }
+    { id: "dawn", photo: "scene-dawn", fg: true, glass: true },
+    // The weather scenes (the Samsung fork): the same places in other weather, edited from the scenes above, so each keeps its base
+    // scene's cut-out, clock and date place (look: the scene whose css it uses). They take turns only with "Follow the sun and
+    // the weather" on, which picks the one that fits the sky now (sunTargetScene).
+    { id: "mostlyclear", photo: "scene-mostlyclear", fg: true, glass: true, look: "golden", weather: true },
+    { id: "partly", photo: "scene-partly", fg: true, glass: true, look: "golden", weather: true },
+    { id: "storm", photo: "scene-storm", fg: true, glass: true, look: "golden", weather: true },
+    { id: "lakerain", photo: "scene-lakerain", fg: false, glass: true, water: 0.55, look: "water", weather: true },
+    { id: "junglerain", photo: "scene-junglerain", fg: true, glass: true, look: "dawn", weather: true },
+    { id: "snow", photo: "scene-snow", fg: true, glass: true, look: "fog", weather: true },
+    { id: "nightcloudy", photo: "scene-nightcloudy", fg: true, glass: true, look: "night", weather: true }
   ];
   var BUILT_IN = SCENE_LIB.slice();   // readConfig() adds your own scenes to SCENE_LIB
   var SCENES = SCENE_LIB.slice(), SCENE_MS = 20000, SUN_SYNC = false;
@@ -720,7 +730,7 @@
     });
     return out;
   }
-  function sceneClass(s) { return s.own ? "own" : s.mine ? "mine" : s.id; }
+  function sceneClass(s) { return s.own ? "own" : s.mine ? "mine" : s.look || s.id; }
 
   // The household's own photos (Home settings, "Your photos") are scenes too, with no cut-out and
   // no glass copy: the clock's fill is the photo itself, frosted in app.css (.s-own).
@@ -743,7 +753,7 @@
     } else {
       // your own scenes (home.my_scenes) are always on: listed in home.scenes they go where they
       // are listed, otherwise after the built-in ones
-      var lib = SCENE_LIB.map(function (x) { return x.id; }), builtIn = BUILT_IN.map(function (x) { return x.id; });
+      var lib = SCENE_LIB.map(function (x) { return x.id; }), builtIn = BUILT_IN.filter(function (x) { return !x.weather; }).map(function (x) { return x.id; });
       var pick = (HOME.scenes || []).filter(function (id, i, a) { return lib.indexOf(id) >= 0 && a.indexOf(id) === i; });
       if (!pick.length) pick = builtIn;
       order = pick.concat(ids.filter(function (id) { return pick.indexOf(id) < 0; }));
@@ -983,38 +993,61 @@
     return { alt: alt, hourAngle: hourAngle * (180 / Math.PI) };
   }
 
+  // What the sky is doing, from the weather service code: clear, mostly clear, partly cloudy, cloudy, fog, drizzle, rain, snow or storm.
+  function weatherKind(code) {
+    if (code == null || !isFinite(code)) return "";
+    if (code === 0) return "clear";
+    if (code === 1) return "mostly";
+    if (code === 2) return "partly";
+    if (code === 3) return "cloudy";
+    if (code === 45 || code === 48) return "fog";
+    if (code >= 51 && code <= 57) return "drizzle";
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+    if (code >= 95) return "storm";
+    return "";
+  }
+  // The scene that fits the sky and the sun now (the weather scenes are used when they are on, else the five as before).
   function sunTargetScene() {
     var st = sceneState();
     var available = st.order.filter(function (id) { return st.off.indexOf(id) < 0; });
-    var pick = function (preferred, fallback) {
-      if (available.indexOf(preferred) >= 0) return preferred;
-      for (var i = 0; i < fallback.length; i++) if (available.indexOf(fallback[i]) >= 0) return fallback[i];
+    // the first of the wanted scenes that is on (the list ends with what is always there)
+    var pick = function (wanted) {
+      for (var i = 0; i < wanted.length; i++) if (available.indexOf(wanted[i]) >= 0) return wanted[i];
       return available[0] || "night";
     };
+    var kind = weatherKind(data.weather && data.weather.code);
 
     if (!WXCFG || WXCFG.lat == null || WXCFG.lon == null || !isFinite(WXCFG.lat) || !isFinite(WXCFG.lon)) {
       var h = new Date().getHours();
-      if (h >= 5 && h < 8) return pick("dawn", ["golden", "water", "fog", "night"]);
-      if (h >= 8 && h < 16) return pick("water", ["fog", "golden", "dawn", "night"]);
-      if (h >= 16 && h < 19) return pick("golden", ["dawn", "water", "fog", "night"]);
-      return pick("night", ["fog", "water", "golden", "dawn"]);
+      if (h >= 5 && h < 8) return pick(["dawn", "golden", "water", "fog", "night"]);
+      if (h >= 8 && h < 16) return pick(["water", "fog", "golden", "dawn", "night"]);
+      if (h >= 16 && h < 19) return pick(["golden", "dawn", "water", "fog", "night"]);
+      return pick(["night", "fog", "water", "golden", "dawn"]);
     }
 
     var pos = solarAltitude(Number(WXCFG.lat), Number(WXCFG.lon), new Date());
-    if (pos.alt < -6) {
-      return pick("night", ["fog", "water", "golden", "dawn"]);
+    var night = pos.alt < -6, wet = { storm: 1, snow: 1, rain: 1, drizzle: 1 }[kind];
+    if (night) {
+      if (kind === "mostly" || kind === "clear" || !kind) return pick(["night", "fog", "water", "golden", "dawn"]);
+      return pick(["nightcloudy", "night", "fog", "water", "golden", "dawn"]);
     }
-    if (pos.alt < 10) {
+    // weather that decides the picture whatever the hour of the day
+    if (kind === "storm") return pick(["storm", "fog", "water", "golden", "dawn", "night"]);
+    if (kind === "snow") return pick(["snow", "fog", "water", "golden", "dawn", "night"]);
+    if (kind === "rain") return pick(["lakerain", "junglerain", "fog", "water", "golden", "dawn", "night"]);
+    if (kind === "drizzle") return pick(["junglerain", "lakerain", "fog", "water", "golden", "dawn", "night"]);
+    if (pos.alt < 10 && !wet) {   // sunrise and sunset, when the sky allows it
+      if (kind === "cloudy" || kind === "fog") return pick(["fog", "water", "golden", "dawn", "night"]);
       return pos.hourAngle < 0
-        ? pick("dawn", ["golden", "water", "fog", "night"])
-        : pick("golden", ["dawn", "water", "fog", "night"]);
+        ? pick(["dawn", "golden", "water", "fog", "night"])
+        : pick(["golden", "dawn", "water", "fog", "night"]);
     }
-    // Daytime (sun altitude >= 10 deg): pick fog for overcast/rainy weather, otherwise water
-    var code = data.weather && data.weather.code;
-    var isFoggy = code != null && [3, 45, 48, 51, 53, 55, 61, 63, 65, 80, 81, 82].indexOf(code) >= 0;
-    return isFoggy
-      ? pick("fog", ["water", "golden", "dawn", "night"])
-      : pick("water", ["fog", "golden", "dawn", "night"]);
+    // the day
+    if (kind === "cloudy" || kind === "fog") return pick(["fog", "water", "golden", "dawn", "night"]);
+    if (kind === "partly") return pick(["partly", "mostlyclear", "water", "fog", "golden", "dawn", "night"]);
+    if (kind === "mostly") return pick(["mostlyclear", "water", "partly", "fog", "golden", "dawn", "night"]);
+    return pick(["water", "mostlyclear", "fog", "golden", "dawn", "night"]);
   }
 
   // Whether a scene may change now. A change costs a weak TV a visible stall (430 ms on an LG
@@ -2367,7 +2400,7 @@
   };
   // The lowest place on the screen (px) where the digits between these sides can show in this scene, or null when nothing is in front.
   function fgCap(el, box) {
-    var sc = SCENES[sceneEls.indexOf(el)], prof = sc && sc.fg && !sc.mine ? FG_TOP[sc.id] : null;
+    var sc = SCENES[sceneEls.indexOf(el)], prof = sc && sc.fg && !sc.mine ? FG_TOP[sc.look || sc.id] : null;
     if (!prof) return null;
     var a = Math.max(0, Math.floor(box.left / innerWidth * 64)), b = Math.min(63, Math.floor(box.right / innerWidth * 64)), top = 0;
     for (var i = a; i <= b; i++) if (prof[i] > top) top = prof[i];
@@ -2393,7 +2426,7 @@
     var cs = el.querySelectorAll(".gclock"), c = cs[0], f = c && c.querySelector(".fill"), q;
     if (!f) return;
     var own = SCENES[sceneEls.indexOf(el)];
-    if (own && own.id === "fog") {   // the Fog clock never moves: its place is part of the picture
+    if (own && (own.look || own.id) === "fog") {   // the Fog clock never moves: its place is part of the picture
       if (el.style.getPropertyValue("--cdy") !== "0px") el.style.setProperty("--cdy", "0px");
       if (el.classList.contains("on") && document.documentElement.style.getPropertyValue("--cdy-r") !== "0px") document.documentElement.style.setProperty("--cdy-r", "0px");
       return;

@@ -111,6 +111,7 @@ def main():
     # Lighter home (no blur, no soft shadows, a still photo, smaller pictures) is on unless config.json says
     # otherwise: a Samsung's browser is slow, and it can be switched off in Home settings, Look
     pub.setdefault("home", {}).setdefault("lighter", True)
+    pub["home"].setdefault("sun_sync", True)   # the scene follows the sun and the weather unless Home settings says otherwise
     with open(os.path.join(stage, "config.js"), "w") as f:
         f.write("(function () {\n  var t = null;\n"
                 "  try { t = localStorage.getItem(\"couch.configjs\"); } catch (e) {}\n"
