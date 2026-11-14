@@ -45,6 +45,32 @@
       x.send();
     })();
   }
+  // Samsung's Apps, left with "Exit" (not by holding Back), stays loaded but shut: tizen.application.launch then answers "done" and nothing
+  // shows. If this app is still in front a few seconds later, the TV's own server is asked to open it (what Smart Hub does), and
+  // after that the app control Smart Hub's tiles use.
+  function ensureOpened(id) {
+    function post(then) {
+      var x = new XMLHttpRequest();
+      x.open("POST", "http://127.0.0.1:8001/api/v2/applications/" + encodeURIComponent(id), true);
+      x.timeout = 8000;
+      x.onreadystatechange = function () { if (x.readyState === 4 && then) then(); };
+      x.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+      try { x.send(""); } catch (e) { if (then) then(); }
+    }
+    setTimeout(function () {
+      if (document.hidden) return;   // it opened (slowly, as Samsung's Apps does)
+      send("log", "apps did not show: asking the TV's server");
+      post(function () {
+        setTimeout(function () {
+          if (document.hidden) return;
+          try {
+            var ctl = new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/default", null, null, null, []);
+            tizen.application.launchAppControl(ctl, id, function () {}, function () { skyNote(t("store_none")); });
+          } catch (e) { skyNote(t("store_none")); }
+        }, 3500);
+      });
+    }, 4500);
+  }
   function comeBack() { try { tizen.application.launch(SELF, function () {}, function () {}); } catch (e) {} }
   function watchBack(id) {
     try { watchBack2(id); } catch (e) { send("log", "watch: " + e); }   // a watcher that fails must never stop an app from opening
@@ -335,7 +361,7 @@
     (function attempt(i) {
       if (i >= ids.length) { send("log", "launch failed for " + pkg + ", asking the bridge"); bridgeLaunch(pkg); return; }
       try {
-        tizen.application.launch(ids[i], function () { send("log", "launched " + ids[i]); watchBack(ids[i]); },
+        tizen.application.launch(ids[i], function () { send("log", "launched " + ids[i]); watchBack(ids[i]); if (pkg === storePkg()) ensureOpened(ids[i]); },
           function (err) { send("log", "launch " + ids[i] + ": " + (err && err.name)); attempt(i + 1); });
       } catch (e) { send("log", "launch " + ids[i] + " threw " + e); attempt(i + 1); }
     })(0);
