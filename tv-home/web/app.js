@@ -1039,6 +1039,7 @@
     if (kind === "drizzle") return pick(["junglerain", "lakerain", "fog", "water", "golden", "dawn", "night"]);
     if (pos.alt < 10 && !wet) {   // sunrise and sunset, when the sky allows it
       if (kind === "cloudy" || kind === "fog") return pick(["fog", "water", "golden", "dawn", "night"]);
+      if (kind === "partly") return pick(["partly", "mostlyclear", "golden", "dawn", "water", "fog", "night"]);   // clouds are in the sky, so show the cloudy picture
       return pos.hourAngle < 0
         ? pick(["dawn", "golden", "water", "fog", "night"])
         : pick(["golden", "dawn", "water", "fog", "night"]);
