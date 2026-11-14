@@ -49,12 +49,16 @@
   var CACHE_KEY = "tvhome.cache.v2";
   // Every word on screen comes from i18n.js, in the language picked in Home settings.
   var t = window.I18N ? window.I18N.t : function (k) { return k; };
+  var tBridge = window.I18N && window.I18N.tBridge ? window.I18N.tBridge : function (key, vars, fallback) {
+    var said = key ? t(key, vars) : fallback;
+    return !key || said === key ? fallback : said;
+  };
 
   // Settings from the bridge's config.json (served as config.js, and saved with the offline copy),
   // read in readConfig() once the page starts (mock.js fills them in for previews). See docs/CONFIG.md.
   var CFG = {}, HOME = {}, TVCFG = {}, QUICK = [];
   var WXCFG = { lat: -33.8688, lon: 151.2093, place: "Sydney", timezone: "Australia/Sydney" };
-  var QUICK_ALL = ["sleep", "picture", "look", "soundscape", "screen_off", "headphones", "input", "bluetooth", "network", "screensaver", "extend"];
+  var QUICK_ALL = ["sleep", "picture", "look", "soundscape", "screen_off", "headphones", "input", "bluetooth", "network", "tvsettings", "screensaver", "extend"];
   // The most personal photos this TV keeps (also MAX_PHOTOS in bridge/server.py and MainActivity.kt).
   var MAX_PHOTOS = 50;
   var ON_TV = false;   // served by the on-TV app (config "mode"), which can open the TV's own settings screens
@@ -407,7 +411,7 @@
     NP_ON = typeof ST.now_playing === "boolean" ? ST.now_playing : HOME.now_playing !== false;
     // the Keep watching row: Home settings win over home.keep_watching; off hides it and stops fetching it
     KW_ON = typeof ST.keep_watching === "boolean" ? ST.keep_watching : HOME.keep_watching !== false;
-    document.documentElement.classList.toggle("kw-off", !KW_ON);
+    document.documentElement.classList.toggle("kw-off", !KW_ON && !CARDS.length);
     // the full screen music view is off until it is switched on in Home settings or home.ambient_music
     AMBIENT_MUSIC = typeof ST.ambient_music === "boolean" ? ST.ambient_music : HOME.ambient_music === true;
     GLASS_FOCUS = (ST.glass_focus || HOME.glass_focus) === "glass" ? "glass" : "colour";
@@ -462,7 +466,7 @@
   // Lighter home: ask for the 640 px size of a Keep watching picture, not the 1440 px one (a card is about 500 px wide)
   function slim(u) { return LIGHTER && typeof u === "string" ? u.replace("/s1440/", "/s640/") : u; }
   function glassSetting() { var g = ST.glass || HOME.glass; return g === "on" || g === "lite" ? g : "off"; }
-  // no clock in Home settings or config.json: the one usual for the language (24 hour in Italian, German, Turkish, French and Serbian)
+  // no clock in Home settings or config.json: the one usual for the language (24 hour in Italian, German, Turkish, French, Serbian, Polish and Brazilian Portuguese)
   function clock24() { return (ST.clock || HOME.clock || (window.I18N ? window.I18N.clock() : "12h")) === "24h"; }
 
   // ---------------- helpers ----------------
@@ -501,10 +505,22 @@
         var j = null;
         try { j = JSON.parse(x.responseText); } catch (e) {}
         if (x.status >= 200 && x.status < 300 && j && j.ok !== false) resolve(j);
-        else reject(new Error((j && j.error) || t("bridge_no", { status: x.status })));
+        else {
+          var err = new Error((j && j.error) || t("bridge_no", { status: x.status }));
+          if (j && j.error_key) { err.key = j.error_key; err.vars = j.error_vars; }
+          reject(err);
+        }
       };
-      x.onerror = function () { reject(new Error(t("bridge_down"))); };
-      x.ontimeout = function () { reject(new Error(t("bridge_slow"))); };
+      x.onerror = function () {
+        var err = new Error(t("bridge_down"));
+        err.key = "bridge_down";
+        reject(err);
+      };
+      x.ontimeout = function () {
+        var err = new Error(t("bridge_slow"));
+        err.key = "bridge_slow";
+        reject(err);
+      };
       x.send(body ? JSON.stringify(body) : null);
     });
   }
@@ -547,9 +563,10 @@
   // page is laid out at 1920x1080 but drawn at devicePixelRatio 2 there, so the 1080 files were
   // stretched and looked soft (couch-tv#8, a UHD LG). Your own scenes in mine/ have no 4K copy.
   var HI_RES = (window.devicePixelRatio || 1) * window.innerWidth >= 3000;
+  // home.hi_res "always" uses the 4K copies even when the page is drawn at 1080 (a 4K panel with a 1080 interface, #191)
   // home.hi_res false keeps the 1080 copies on a 4K screen whose chip struggles with 3840x2160 photos
   // (an LG 43SQ700S monitor): they are four times the pixels to decode and keep in memory.
-  function bgPath(name, ext, builtIn) { return "backgrounds/" + name + (HI_RES && HOME.hi_res !== false && builtIn !== false ? "@2x" : "") + ext; }
+  function bgPath(name, ext, builtIn) { return "backgrounds/" + name + ((HOME.hi_res === "always" || (HI_RES && HOME.hi_res !== false)) && builtIn !== false ? "@2x" : "") + ext; }
   var KEEP_PHOTO = false;   // Home settings, Look, Keep one photo (Classic): no rotation, same picture after a reload
   var photo = 0, photoTimer = null, bgShown = null, bgLayer = 0, bgTicket = 0;
 
@@ -1277,13 +1294,13 @@
       if (ambI === 1 && STANDALONE && window.CouchSpotify) window.CouchSpotify.playHere(note);
       else if (ambI === 3 && !STANDALONE) {
         var spPkg = (music.app && (music.app.package || music.app.id)) || null;
-        if (spPkg) api("POST", "/api/launch", { app: spPkg }).catch(function (e) { note(e.message); });
+        if (spPkg) api("POST", "/api/launch", { app: spPkg }).catch(function (e) { note(tBridge(e.key, e.vars, e.message)); });
       }
       return;
     }
     if (ambI === 3) {
       var pkg = (music.app && (music.app.package || music.app.id)) || null;
-      if (pkg) api("POST", "/api/launch", { app: pkg }).catch(function (e) { note(e.message); });
+      if (pkg) api("POST", "/api/launch", { app: pkg }).catch(function (e) { note(tBridge(e.key, e.vars, e.message)); });
       return;
     }
     var key = ["previous", "play_pause", "next"][ambI];
@@ -1292,7 +1309,7 @@
       renderAmbientMusic();
       renderNp();
     }
-    api("POST", "/api/key", { key: key }).catch(function (e) { note(e.message); });
+    api("POST", "/api/key", { key: key }).catch(function (e) { note(tBridge(e.key, e.vars, e.message)); });
     setTimeout(refreshMusic, key === "play_pause" ? 1500 : 900);
   }
 
@@ -1384,7 +1401,7 @@
       renderNp();
       renderAmbientMusic();
     }
-    api("POST", "/api/key", { key: key }).catch(function (e) { note(e.message); });
+    api("POST", "/api/key", { key: key }).catch(function (e) { note(tBridge(e.key, e.vars, e.message)); });
     setTimeout(refreshMusic, key === "play_pause" ? 1500 : 900);
   }
 
@@ -1547,6 +1564,7 @@
       if (q === "input") return !OFFLINE || nativeInputs();
       if (q === "screensaver") return nativeScreensaver();
       if (q === "bluetooth" || q === "network") return nativeSettingsScreen() || (ON_TV && !OFFLINE);
+      if (q === "tvsettings") return !!(TV && (TV.launch || TV.openSettings)) || !OFFLINE;
       if (q === "extend") return devOn();
       return false;
     });
@@ -1600,6 +1618,8 @@
         el.classList.toggle("set", devBusy);
       } else if (q === "bluetooth" || q === "network") {
         el.innerHTML = ICONS[q] + "<span>" + esc(t(q)) + "</span>";
+      } else if (q === "tvsettings") {
+        el.innerHTML = ICONS.gear + "<span>" + esc(t("gear_tv")) + "</span>";
       }
     });
     var sv = $("q-screensaver");   // an icon only look (Night) still says what it is, to the eye and to a screen reader
@@ -1650,7 +1670,7 @@
     if (!OFFLINE) {
       api("POST", "/api/sleep", { minutes: minutes })
         .then(function (j) { if (j.ends !== undefined) sleepEnds = j.ends ? Date.parse(j.ends) : null; renderQuick(); refreshBedtimeDim(); })
-        .catch(function (e) { note(e.message); refreshQuick(); });
+        .catch(function (e) { note(tBridge(e.key, e.vars, e.message)); refreshQuick(); });
     }
   }
   function togglePicture() {
@@ -1662,7 +1682,7 @@
     renderQuick();
     api("POST", "/api/picture", { mode: "toggle" }, 20000)
       .then(function (j) { if (j.mode) picMode = j.mode; })
-      .catch(function (e) { note(e.message); })
+      .catch(function (e) { note(tBridge(e.key, e.vars, e.message)); })
       .then(function () { picBusy = false; renderQuick(); });
   }
   // The look is kept on this TV; the page starts again in the other look.
@@ -1675,8 +1695,12 @@
     restart();
   }
   // Start the page again, so a new look or new settings take effect everywhere at once.
+  // A location.replace to the very same address can be dropped by the launcher's WebView, so
+  // reload when nothing in the address changes.
   function restart() {
-    location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
+    var to = location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, "");
+    if (to === location.href) location.reload();
+    else location.replace(to);
   }
   // Screen off / Audio-only mode: turns off the display (pitch black canvas for OLEDs and hardware backlight floor)
   // while sleep soundscapes, Spotify, and sleep timers continue playing in the dark.
@@ -1781,7 +1805,7 @@
     var native = function () { try { return !!(TV && TV.openInputs && TV.openInputs()); } catch (e) { return false; } };
     if (OFFLINE) { if (!native()) note(t("no_inputs")); return; }
     api("POST", "/api/key", { key: "input" })
-      .catch(function (e) { if (!native()) note(e.message); });
+      .catch(function (e) { if (!native()) note(tBridge(e.key, e.vars, e.message)); });
   }
   // ---------------- the Input menu (#30) ----------------
   // The TV's own inputs, read by the launcher from Android's TV input list (TVOS.tvInputs): each HDMI
@@ -1849,7 +1873,7 @@
       try { ok = !!TV.openSettingsScreen(which); } catch (e) {}
       if (ok) return;
     }
-    if (ON_TV && !OFFLINE) api("POST", "/api/launch", { app: which }).catch(function (e) { note(e.message); });
+    if (ON_TV && !OFFLINE) api("POST", "/api/launch", { app: which }).catch(function (e) { note(tBridge(e.key, e.vars, e.message)); });
   }
   // The TV's own screensaver (Google TV's Ambient mode: the Google Photos albums are chosen there).
   function startScreensaver() {
@@ -1875,6 +1899,7 @@
     else if (q === "screensaver") startScreensaver();
     else if (q === "extend") devExtend();
     else if (q === "bluetooth" || q === "network") openSettingsScreen(q);
+    else if (q === "tvsettings") openTvSettings();
   }
   // Headphones: the TV's own Bluetooth screen. The launcher opens it itself, the on-TV app through
   // its /api/launch, and the bridge with a fixed ADB command (POST /api/bluetooth-audio, no body).
@@ -1885,7 +1910,7 @@
     if (OFFLINE) { note(t("quick_needs_bridge")); return; }
     if (ON_TV) { openSettingsScreen("bluetooth"); return; }
     api("POST", "/api/bluetooth-audio").catch(function (e) {
-      note(e.message || t("headphones_not_found"));
+      note(tBridge(e.key, e.vars, e.message) || t("headphones_not_found"));
     });
   }
   function refreshQuick() {
@@ -2055,7 +2080,7 @@
       launch: function (pkg) {
         opened(pkg);
         if (TV && TV.launch(pkg)) return;
-        api("POST", "/api/launch", { app: pkg }).catch(function (e) { status(e.message); });
+        api("POST", "/api/launch", { app: pkg }).catch(function (e) { status(tBridge(e.key, e.vars, e.message)); });
       },
       isOk: isOk, isBack: isBack, isMenu: isMenu, isSettings: isSettings, arrowOf: arrowOf,
       unlocked: kidsUnlocked
@@ -2114,13 +2139,17 @@
     // is up at night). The people switcher stays: with nothing yet (Netflix tells Android nothing on
     // some TVs, issue #23) it is the only way to say who is watching before anything is played.
     var jfNote = jfRowNote();   // the Samsung app: not set up yet, or why the Jellyfin row is empty
-    $("shelf-section").classList.toggle("empty", !anyone && !jfNote && !(NIGHT && npVisible()));
+    $("shelf-section").classList.toggle("empty", !anyone && !jfNote && !(NIGHT && npVisible()) && !CARDS.length);
+    // custom cards keep the row (and its heading) even with Keep watching switched off
+    document.documentElement.classList.toggle("kw-off", !KW_ON && !CARDS.length);
+    $("shelf-title").textContent = t(data.shows.length || !CARDS.length ? "keep_watching" : "custom_cards");
     renderPeople();
-    if (!KW_ON) { track.innerHTML = ""; shelfEls = []; return; }   // row switched off: nothing to draw, the section is closed up
+    if (!KW_ON) { track.innerHTML = ""; shelfEls = []; addCards(track); return; }   // row switched off: only the custom cards, if any
     if (!data.shows.length) {
       var name = PEOPLE[whoIndex()].name;
-      track.innerHTML = '<p class="shelf-none">' + esc(jfNote || (peopleCount() < 2 ? t("nothing_yet") : t("nothing_for", { name: name }))) + "</p>";
+      track.innerHTML = CARDS.length ? "" : '<p class="shelf-none">' + esc(jfNote || (peopleCount() < 2 ? t("nothing_yet") : t("nothing_for", { name: name }))) + "</p>";
       shelfEls = [];
+      addCards(track);
       return;
     }
     if (jrow) {
@@ -2181,6 +2210,7 @@
           (it.progress ? '<span class="nbar"><i style="width:' + Math.round(it.progress * 100) + '%"></i></span>' : "") + "</div></div>";
       }).join("");
       shelfEls = Array.prototype.slice.call(track.children);
+      addCards(track);
       return;
     }
     track.innerHTML = data.shows.map(function (it) {
@@ -2193,6 +2223,87 @@
         badge + bar + '</div><div class="caption"><b>' + esc(it.title) + "</b><span>" + esc(subtitle(it)) + "</span></div></div>";
     }).join("");
     shelfEls = Array.prototype.slice.call(track.children);
+    addCards(track);
+  }
+
+  // ---------------- custom cards (home.custom_cards, cards.js; idea from geissmannz on Instagram) ----------------
+  // The household's own cards, at the end of the Keep watching row. Display only: every string goes in
+  // with textContent, an image only from an http(s) link, and OK opens an installed app or an http(s)
+  // link through the same /api/launch the app tiles use. Off (no cards, no fetching) unless set.
+  var CARDS = [];
+  function cardAt(i) { return i >= data.shows.length ? CARDS[i - data.shows.length] || null : null; }
+  function addCards(track) {
+    CARDS.forEach(function (c) {
+      var el = document.createElement("div");
+      var img = null;
+      if (c.image) {
+        img = document.createElement("img");
+        img.alt = ""; img.decoding = "async";
+        img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); };
+        img.src = c.image;
+      }
+      var add = function (parent, tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        n.textContent = text;
+        parent.appendChild(n);
+        return n;
+      };
+      if (NIGHT) {
+        el.className = "tile ncard ccard";
+        if (img) { img.className = "thumb"; el.appendChild(img); }
+        var tx = document.createElement("div");
+        tx.className = "t";
+        if (c.subtitle) add(tx, "div", "nap", c.subtitle);
+        add(tx, "b", "", c.title);
+        if (c.value) add(tx, "i", "", c.value);
+        el.appendChild(tx);
+      } else {
+        el.className = "tile show ccard" + (img ? " has-img" : "");
+        var face = document.createElement("div");
+        face.className = "face";
+        if (img) face.appendChild(img);
+        var words = document.createElement("div");
+        words.className = "cwords";
+        if (c.value) add(words, "span", "cvalue", c.value);
+        add(words, "b", "", c.title);
+        face.appendChild(words);
+        el.appendChild(face);
+      }
+      track.appendChild(el);
+      shelfEls.push(el);
+    });
+  }
+  function openCard(c) {
+    if (!c || (!c.app && !c.url)) return;
+    if (c.app && TV && TV.launch(c.app)) return;
+    if (OFFLINE) { status(t("computer_off")); return; }
+    api("POST", "/api/launch", { app: c.app || c.url }).catch(function (e) { status(tBridge(e.key, e.vars, e.message)); });
+  }
+  function setCards(list) {
+    if (!list) return;   // not JSON, or nothing came back: keep the last good cards
+    var before = JSON.stringify(CARDS);
+    CARDS = list;
+    if (JSON.stringify(list) === before) return;
+    // redraw now only where it cannot pull anything from under the remote; otherwise the next refresh does
+    if (zone === "shelf" || zone === "grid" || zone === "people" || zone === "quick" || zone === "np") {
+      renderShelf();
+      s = Math.max(0, Math.min(s, shelfEls.length - 1));
+      paintFocus();
+    }
+  }
+  function refreshCards() {
+    var src = HOME.custom_cards, CC = window.CustomCards;
+    if (!src || !CC) return;
+    // a link: the on-TV app (or a home with no computer) reads it itself, so it needs CORS
+    var direct = function () {
+      if (typeof src !== "string" || !window.fetch) return;
+      fetch(src, { credentials: "omit", cache: "no-store" })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (s) { setCards(s == null ? null : CC.parse(s)); }, function () {});
+    };
+    if (OFFLINE) { direct(); return; }
+    api("GET", "/api/custom-cards", null, 9000).then(function (j) { setCards(CC.clean(j.cards || [])); }, direct);
   }
 
   // Keep watching with no computer: the one list the TV has (Android's Watch Next, or the Samsung app's Jellyfin row), the same for
@@ -2384,7 +2495,7 @@
     var extra = apps.filter(tucked);
     var inputs = resolveInputs();
     list = list.concat(inputs);
-    data.screens.forEach(function (sc) { list.push({ kind: "screen", id: sc.id, name: sc.name, ready: sc.ready, note: sc.note }); });
+    data.screens.forEach(function (sc) { list.push({ kind: "screen", id: sc.id, name: sc.name, ready: sc.ready, note: sc.note, noteKey: sc.note_key, noteVars: sc.note_vars }); });
     var tools = toolItems();
     if (expanded) return list.concat(extra, tools);
     if (extra.length || list.length > GRID_MAX - tools.length) {
@@ -2399,7 +2510,7 @@
   function arrangeItems() {
     var rest = shownApps().filter(function (a) { return a.package !== SETTINGS_PKG; });
     var screens = data.screens.map(function (sc) {
-      return { kind: "screen", id: sc.id, name: sc.name, ready: sc.ready, note: sc.note, package: "screen:" + sc.id };
+      return { kind: "screen", id: sc.id, name: sc.name, ready: sc.ready, note: sc.note, noteKey: sc.note_key, noteVars: sc.note_vars, package: "screen:" + sc.id };
     });
     var inputs = resolveInputs();
     var shown = rest.filter(function (a) { return !tucked(a); });
@@ -2593,6 +2704,7 @@
     try {
       if (TV && TV.dismissWatchNext) TV.dismissWatchNext(id, pkg, title);
     } catch (e) {}
+    if (!OFFLINE && data.bridge !== false && it.source === "bridge") api("POST", "/api/continue/hide", { id: id }).catch(function () {});   // the phone's list too
 
     var dismissed = kept("tvhome.dismissed_shows") || [];
     var sig = pkg + "|" + title;
@@ -2613,12 +2725,12 @@
       });
       data.shows = (data.showsBy[who] || []).slice(0, KEEP_MAX);
       renderShelf();
-      if (!data.shows.length) {
+      if (!shelfEls.length) {
         if (!jfRowNote()) $("shelf-section").classList.add("empty");
         zone = "grid";
         g = 0;
       } else {
-        s = Math.max(0, Math.min(s, data.shows.length - 1));
+        s = Math.max(0, Math.min(s, shelfEls.length - 1));
         zone = "shelf";
       }
       paintFocus();
@@ -2888,6 +3000,14 @@
       loadBackdrop(shelfEls[s]);
       scrollShelf();
       if (NIGHT) return;   // the cards carry the titles; the photo stays put under the clock
+      var cc = cardAt(s);
+      if (cc) {   // a custom card: its title and line at the top, the photo stays (its picture may be small)
+        hero({ title: cc.title, app: cc.subtitle ? { name: cc.subtitle } : null });
+        $("place").style.visibility = "hidden";
+        showPhoto();
+        renderHint();
+        return;
+      }
       setBg(data.shows[s].backdrop || data.shows[s].poster, true);
       hero(data.shows[s]);
       $("place").style.visibility = "hidden";
@@ -3194,6 +3314,7 @@
       return;
     }
     if (zone === "shelf") {
+      if (cardAt(s)) { openCard(cardAt(s)); return; }
       var it = data.shows[s];
       if (!it) return;
       status(it.app ? t("opening_in", { title: it.title, app: it.app.name }) : t("opening", { title: it.title }), true);
@@ -3203,11 +3324,11 @@
         return;
       }
       api("POST", "/api/continue/open", { id: it.id, who: NOBODY ? "both" : who }, 60000)
-        .then(function (res) { status(res.note || ""); })
+        .then(function (res) { status(res.note ? tBridge(res.note_key, res.note_vars, res.note) : ""); })
         .catch(function (e) {
           // the bridge can't help: at least open the app it was in
           if (TV && it.app && TV.launch(it.app.package)) { status(""); return; }
-          status(e.message);
+          status(tBridge(e.key, e.vars, e.message));
         });
       return;
     }
@@ -3221,27 +3342,27 @@
       var done = false;
       if (TV && TV.openInput) { try { done = !!TV.openInput(a.id); } catch (e) {} }
       if (!done && !OFFLINE) {
-        api("POST", "/api/key", { key: "input" }).catch(function (e) { status(e.message); });
+        api("POST", "/api/key", { key: "input" }).catch(function (e) { status(tBridge(e.key, e.vars, e.message)); });
       } else if (!done) {
         note(t("no_inputs"));
       }
       return;
     }
     if (a.kind === "screen") {
-      if (!a.ready) { status(a.note || t("screen_not_set")); return; }
+      if (!a.ready) { status(tBridge(a.noteKey, a.noteVars, a.note || t("screen_not_set"))); return; }
       el.classList.add("busy");
       api("POST", "/api/screens/open", { id: a.id }, 10000)
-        .then(function (res) { status(res.note || ""); })
+        .then(function (res) { status(res.note ? tBridge(res.note_key, res.note_vars, res.note) : ""); })
         .catch(function (e) {
           if (TV && TV.launch("com.limelight")) { status(""); return; }
-          status(e.message);
+          status(tBridge(e.key, e.vars, e.message));
         })
         .then(function () { el.classList.remove("busy"); });
       return;
     }
     opened(a.package);
     if (TV && TV.launch(a.package)) return;
-    api("POST", "/api/launch", { app: a.id || a.package }).catch(function (e) { status(e.message); });
+    api("POST", "/api/launch", { app: a.id || a.package }).catch(function (e) { status(tBridge(e.key, e.vars, e.message)); });
   }
 
   // ---------------- Smart home: the rooms and scenes screen (smarthome.js) ----------------
@@ -3713,7 +3834,7 @@
     // the whole Keep watching row, heading and all (home.keep_watching): off closes the gap and stops fetching it
     rows.push({ kind: "toggle", key: "keep-watching", label: t("keep_show"), value: KW_ON ? t("on") : t("off"), act: function () {
       KW_ON = !KW_ON; ST.keep_watching = KW_ON; saveSettings();
-      document.documentElement.classList.toggle("kw-off", !KW_ON);
+      document.documentElement.classList.toggle("kw-off", !KW_ON && !CARDS.length);
       if (!KW_ON) { data.shows = []; shelfEls = []; s = 0; }
       renderShelf(); renderNp();
     } });
@@ -4082,6 +4203,7 @@
     if (q === "input" && OFFLINE && !nativeInputs()) return t("quick_needs_inputs");
     if (q === "screensaver") return nativeScreensaver() ? t("quick_screensaver_sub") : t("quick_needs_tv_app");
     if ((q === "bluetooth" || q === "network") && !nativeSettingsScreen() && (!ON_TV || OFFLINE)) return t("quick_needs_tv_app");
+    if (q === "tvsettings" && OFFLINE && !(TV && (TV.launch || TV.openSettings))) return t("quick_needs_bridge");
     if (q === "extend" && !devCan()) return t("quick_needs_devmode");
     return "";
   }
@@ -4984,7 +5106,7 @@
     noDream: function () { note(t("no_dream")); },
     // the remote's Settings/gear key, caught by the launcher natively (MainActivity.dispatchKeyEvent)
     settingsKey: function () { blip(0, 0); settingsKey(); },
-    resume: function () { toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
+    resume: function () { toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); refreshCards(); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
     // an app is in front: the video background stops until the home is back
     pause: function () { saveFocusNow(); pauseVideo(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
@@ -5049,6 +5171,11 @@
     showPhoto();
     startVideo();
     photoTimer = setInterval(nextPhoto, PHOTO_MS);
+    // custom cards (home.custom_cards): every 10 minutes, and never before the home is drawn
+    if (HOME.custom_cards && window.CustomCards) {
+      setTimeout(refreshCards, 1500);
+      setInterval(refreshCards, window.CustomCards.EVERY_MIN * 60000);
+    }
     var cached = load();
     if (cached) { data.showsBy = cached.showsBy || data.showsBy; data.screens = cached.screens || []; data.order = cached.order || null; }
     setPeople(PEOPLE);   // the cache may predate someone new

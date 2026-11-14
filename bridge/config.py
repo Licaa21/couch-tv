@@ -12,6 +12,8 @@ import re
 import shutil
 import tempfile
 
+import custom_cards
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
@@ -64,11 +66,11 @@ if PAIRING_KEY and not re.fullmatch(r"[A-Za-z0-9_-]{12,128}", PAIRING_KEY):
 CLIENT_NAME = CONFIG.get("client_name", "Couch TV bridge")
 
 # The languages the TV home and the phone remote speak (tv-home/web/i18n.js, remote/src/i18n.js).
-LANGUAGES = ("en", "es", "es-MX", "it", "de", "tr", "fr", "sr-Latn-RS", "nl", "he", "cs")
+LANGUAGES = ("en", "es", "es-MX", "it", "de", "tr", "fr", "sr-Latn-RS", "nl", "he", "cs", "pl", "pt")
 # Where shows stream (JustWatch) and what the prompts call the country: "country" in config.json.
 # Without it: the country of the home's language, where it has one of its own (Italian: IT,
-# German: DE, Turkish: TR, Serbian: RS, Dutch: BE), else AU.
-_LANGUAGE_COUNTRY = {"it": "IT", "de": "DE", "tr": "TR", "sr-Latn-RS": "RS", "nl": "BE", "he": "IL", "cs": "CZ"}
+# German: DE, Turkish: TR, Serbian: RS, Dutch: BE, Hebrew: IL, Czech: CZ, Polish: PL, Brazilian Portuguese: BR), else AU.
+_LANGUAGE_COUNTRY = {"it": "IT", "de": "DE", "tr": "TR", "sr-Latn-RS": "RS", "nl": "BE", "he": "IL", "cs": "CZ", "pl": "PL", "pt": "BR"}
 _language = CONFIG["home"].get("language") if isinstance(CONFIG.get("home"), dict) else None
 COUNTRY = str(CONFIG.get("country") or _LANGUAGE_COUNTRY.get(str(_language)) or "AU").upper()
 _COUNTRY_NAMES = {
@@ -77,7 +79,7 @@ _COUNTRY_NAMES = {
     "SG": "Singapore", "DE": "Germany", "FR": "France", "ES": "Spain", "IT": "Italy",
     "NL": "the Netherlands", "SE": "Sweden", "NO": "Norway", "DK": "Denmark", "FI": "Finland",
     "BR": "Brazil", "MX": "Mexico", "JP": "Japan", "KR": "South Korea", "PH": "the Philippines",
-    "RS": "Serbia", "IL": "Israel", "CZ": "Czechia",
+    "RS": "Serbia", "IL": "Israel", "CZ": "Czechia", "PL": "Poland",
 }
 COUNTRY_NAME = CONFIG.get("country_name") or _COUNTRY_NAMES.get(COUNTRY, COUNTRY)
 # The home's time zone, for times the bridge writes down: "timezone" under "weather".
@@ -303,7 +305,7 @@ def _home(h):
         out["idle_photo_seconds"] = idle_photo_seconds
     # Only when config.json gives them. Without "language" the TV home speaks the TV's own language
     # (English if it is not one of LANGUAGES), and without "clock" it uses that language's usual
-    # clock (24 hour in Italian, German, Turkish, French and Serbian, else 12 hour). Home settings on the TV win over both.
+    # clock (24 hour in Italian, German, Turkish, French, Serbian, Polish and Brazilian Portuguese, else 12 hour). Home settings on the TV win over both.
     clock = str(h.get("clock") or "").lower()
     if clock in ("12h", "24h"):
         out["clock"] = clock
@@ -327,8 +329,8 @@ def _home(h):
     # lighter home for a slow box (#58): no blur, no soft shadows, a still photo, smaller pictures
     if isinstance(h.get("lighter"), bool):
         out["lighter"] = h["lighter"]
-    # false: a 4K screen with a weak chip keeps the 1080 backgrounds (lg/build.py then leaves the 4K copies out)
-    if isinstance(h.get("hi_res"), bool):
+    # "always": the 4K copies on a 4K panel whose interface is drawn at 1080 (#191). false: a 4K screen with a weak chip keeps the 1080 backgrounds (lg/build.py then leaves the 4K copies out)
+    if isinstance(h.get("hi_res"), bool) or h.get("hi_res") == "always":
         out["hi_res"] = h["hi_res"]
     # how clear the glass is, 1 (frosted) to 5 (very clear), and the Night clock's style
     if isinstance(h.get("glass_amount"), int) and not isinstance(h.get("glass_amount"), bool) and 1 <= h["glass_amount"] <= 5:
@@ -377,6 +379,12 @@ def _home(h):
             "volume": 0.5,
             "fade_with_sleep": True,
         }
+    # custom cards (geissmannz on Instagram): a JSON file on this computer or an http(s) link. The TV
+    # sees the link (so the on-TV app, with no bridge, can read it too) or just true for a file,
+    # never the file's path. Off unless set.
+    src = custom_cards.source(h.get("custom_cards"), os.path.dirname(os.path.abspath(CONFIG_FILE)))
+    if src:
+        out["custom_cards"] = src[1] if src[0] == "url" else True
     out["watch_next_per_app"] = _int(h.get("watch_next_per_app"), 5, 1, 20)
     out["smart_idle"] = _smart_idle(h.get("smart_idle"))
     if "inputs" in h:
@@ -416,8 +424,12 @@ def _inputs(raw_list):
 
 HOME = _home(CONFIG.get("home"))
 
+# the source of the custom cards (home.custom_cards), kept here: the TV only sees HOME["custom_cards"]
+CUSTOM_CARDS = custom_cards.source((CONFIG.get("home") or {}).get("custom_cards") if isinstance(CONFIG.get("home"), dict) else None,
+                                   os.path.dirname(os.path.abspath(CONFIG_FILE)))
+
 # ---------- quick settings (per TV) and picture modes ----------
-QUICK_IDS = ["sleep", "picture", "look", "soundscape", "screen_off", "input", "screensaver", "headphones", "extend"]
+QUICK_IDS = ["sleep", "picture", "look", "soundscape", "screen_off", "input", "screensaver", "headphones", "tvsettings", "extend"]
 
 
 def quick_for(tv_cfg):

@@ -6,6 +6,58 @@ The newest release is **0.12** (9 November 2026). The TV apps come from [the Rel
 
 ## November 2026
 
+### 14 November 2026: app names checked before closing or switching off apps (on main, in the next release)
+
+The bridge now checks every app name before it closes apps when a TV turns off (`close_on_off` in `config.json`) and before its daily keep-disabled check switches apps off or back on. A name that is not a plain Android package name is skipped with a line in the log, and the rest still run, so a mistyped or tampered file can never send anything else to the TV. Nothing changes for a normal setup. Thanks ekagra-codes (#177).
+
+### 14 November 2026: remove a card from Keep watching on the phone remote (on main, in the next release)
+
+Thanks poinch (#176). Each poster in Keep watching on the phone remote now has a small X. Tap it and that show leaves the row for that TV and that person, and a line says it was removed. It stays gone, including after the bridge restarts, until the show is played again, and then it comes back. Removing a card on the TV home does the same on the phone. The bridge keeps the list in `bridge/data/hidden.json` and the phone uses a new `POST /api/continue/hide`, which needs the pairing key like the other `/api` routes. The phone strings are in English, Italian and Polish.
+
+### 14 November 2026: your own cards on the home, without changing couch-tv (on main, in the next release)
+
+The home can now show your own cards at the end of the Keep watching row: the solar output today, bin night, a message for the family. Point `home.custom_cards` in `config.json` at a small JSON file, either a file on the bridge computer or an `http` or `https` link (a raw GitHub file, a Raspberry Pi on your Wi-Fi), and whatever you like writes that file. couch-tv only shows the cards: a title, a value, a subtitle and a picture, and OK opens an installed app or a link. Nothing in the file is ever run, at most 8 cards show, and a bad file keeps the last good cards. It is read every 10 minutes and is off unless you set it ([TV-HOME.md](TV-HOME.md#custom-cards)). Thanks geissmannz on Instagram for the idea.
+
+### 14 November 2026: Polish bridge messages, and the assistant answers in Polish (on main, in the next release)
+
+With the home set to Polish, the bridge's own messages (an app that will not open, a TV that is not answering, what an input switch did) now show in Polish on the phone remote and the TV home, and the Claude assistant answers in Polish, quick reply buttons and the reasons on its picks included. The assistant follows the TV home's language in every language: Home settings on that TV first, then `home.language` in `config.json`, then English. The bridge still sends every message in English exactly as before, with a key beside it, so the other languages show the English text until someone translates the new keys. Thanks Azumi0 (#196). The on-TV app follows in part 3.
+
+### 14 November 2026: the phone remote is complete in Brazilian Portuguese (on main, in the next release)
+
+The phone remote now has every sentence in Brazilian Portuguese: the 27 Kids mode lines that showed in English after #193 are translated, so the remote has all 166. The TV home was already complete and is unchanged. Thanks scursel (#195).
+
+### 14 November 2026: TV home over paired Wireless debugging, tested on an Epson LS300 (on main, in the next release)
+
+`tv-home/tools/tvadb.py` can now install and test the TV home over a Wireless debugging connection you have already paired with Google's `adb`, without opening port 5555. `apply.sh` goes through `tvadb.py` too, but has not been tried this way yet. It is opt in: set `TV_ADB_BINARY` to that `adb` and `ADB_PORT` to the current connection port. Without `TV_ADB_BINARY` nothing changes, and the bridge, the phone remote and the other tools still use plain ADB on the fixed port. Tested on one Epson LS300 projector (Android TV 14): install, apps, the projector remote's buttons and a restart worked. The Home button on stock LS300 firmware, and the LS650, LS800 and LS500, are untested ([EPSON.md](EPSON.md)). Thanks mazzanfar (#194).
+
+### 14 November 2026: Brazilian Portuguese on the TV home and the phone remote (on main, in the next release)
+
+The TV home and the phone remote now speak Brazilian Portuguese (Português (Brasil), `pt`). A TV or phone set to Portuguese picks it by itself, and Home settings can switch to it. The clock is 24 hour unless you pick 12 hour, and the country for where shows stream is `BR` when `config.json` does not set one. All 398 TV home sentences are translated; the phone remote has 139 of its 166 (the newest few show in English for now). Thanks scursel (#193).
+
+### 14 November 2026: a TV settings quick button, and Settings opens on its own screen (on main, in the next release)
+
+TV settings, Bluetooth and Network now open on the screen you asked for. Android's Settings app keeps a single task, so opening TV settings after visiting Network used to bring back the Network page. The launcher now clears that task first. There is also a new **tvsettings** quick button for people who reach the TV's Settings often: add it in Home settings (or `home.quick`), it is off unless you add it. It uses the same route as Home settings, TV settings, so it works on the TV home launcher (option A) and with the bridge. Thanks syedhabibtirmizi ([#190](https://github.com/Seagey/couch-tv/pull/190)).
+
+### 14 November 2026: Polish on the TV home and the phone remote (on main, in the next release)
+
+The TV home and the phone remote now speak Polish (Polski). A TV or phone set to Polish picks it by itself, and Home settings can switch to it. The clock is 24 hour unless you pick 12 hour, and the country for where shows stream is `PL` when `config.json` does not set one. English and the other languages are unchanged. Thanks Azumi0 (#184), who wrote it and plans two follow ups: the bridge's own messages, and the on-TV app.
+
+### 14 November 2026: the Look button and Home settings changes show at once on the TV home (on main, in the next release)
+
+On the TV home app, pressing the Look quick button, or changing a look or other setting in Home settings, saved the choice but the screen did not change until the app next restarted. The page restarts itself after those changes, and the app's WebView was refusing that reload along with every other navigation. It now lets the home page reload itself (same address, under `/tv/`, for both the bridge home and the saved offline copy) and still refuses every other address. The reload also uses `location.reload()` when the address would not change. Thanks clembgrn for the diagnosis ([#185](https://github.com/Seagey/couch-tv/issues/185)) and syedhabibtirmizi for the fix ([#189](https://github.com/Seagey/couch-tv/pull/189)). It may also be the cause of [#186](https://github.com/Seagey/couch-tv/issues/186).
+
+### 14 November 2026: Czech is complete, and the phone remote speaks Czech too (on main, in the next release)
+
+The Czech TV home now has every sentence translated, including Ambient, the quick buttons, Kids mode and the LG Developer Mode lines, so nothing shows in English any more. The phone remote now speaks Czech as well (Čeština, picked in the TV menu under Language, or by itself on a phone set to Czech). Thanks slezaCZ, who wrote both sets of translations (#180).
+
+### 14 November 2026: sharper scenes on a 4K TV that draws its interface at 1080 (on main, in the next release)
+
+Some 4K TVs (a TCL Google TV) draw apps at 1080 and upscale them, so the home thought the screen was 1080 and loaded the softer 1080 scene pictures. `home.hi_res: "always"` in `config.json` now loads the 4K copies anyway. It is off by default and there is no Home settings switch yet (thanks Hiren-Patel1, [#191](https://github.com/Seagey/couch-tv/issues/191)).
+
+### 14 November 2026: an app banner that is not 16:9 is no longer squeezed (on main, in the next release)
+
+The app row draws each app's TV banner as a 16:9 tile. A banner of another shape was stretched to fit, which is how Prime Video looked squeezed on a Fire TV Stick (thanks niravsaxena30, [#181](https://github.com/Seagey/couch-tv/issues/181)). Such a banner now keeps its proportions, fitted inside the tile with its own edge colour filling the gap. Banners that are already 16:9 draw exactly as before. This is a likely cause rather than a confirmed one, so #181 stays open until it is checked on the stick.
+
 ### 14 November 2026: the bridge's web pages stay inside their own folder (on main, in the next release)
 
 The bridge serves the phone remote and the TV home from their folders. A folder next to one of them whose name started the same way (for example `dist_old` beside `dist`) could be read through it. Now only files inside the folder itself are served. Thanks ekagra-codes (#179).

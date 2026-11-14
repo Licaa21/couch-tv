@@ -374,7 +374,13 @@ class MainActivity : Activity() {
                 if (req.isForMainFrame && res.statusCode >= 500) pageFailed()
             }
 
-            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest) = true
+            // Only the home page itself may navigate (its restart() after a look or Home settings
+            // change, #185); anything on another host or path is refused.
+            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
+                val here = view.url?.let { Uri.parse(it) } ?: return true
+                return !(req.isForMainFrame && req.url.host == here.host && req.url.port == here.port &&
+                    req.url.path?.startsWith("/tv/") == true)
+            }
 
             override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
                 val u = req.url
@@ -1034,7 +1040,7 @@ class MainActivity : Activity() {
         banners[pkg]?.let { return it }
         val ri = tvApps().firstOrNull { it.activityInfo.packageName == pkg } ?: return null
         val version = try { packageManager.getPackageInfo(pkg, 0).lastUpdateTime } catch (e: Exception) { 0L }
-        val file = java.io.File(java.io.File(filesDir, "banners").apply { mkdirs() }, "$pkg-$version-v3.jpg")
+        val file = java.io.File(java.io.File(filesDir, "banners").apply { mkdirs() }, "$pkg-$version-v4.jpg")
         val bytes = if (file.exists()) file.readBytes() else bannerBytes(ri)?.also { file.writeBytes(it) }
         if (bytes != null) banners[pkg] = bytes
         return bytes
@@ -1377,16 +1383,19 @@ class MainActivity : Activity() {
             ?: return false
         // Bell's Fibe app is the home on a Bell Streamer and also its live TV: opened on purpose, it stays (#168).
         if (pkg == FireWatch.BELL_FIBE_HOME) FireWatch.fibeOpenedNow()
+        if (pkg == "com.android.tv.settings") return startSettings(i)
         return start(i)
     }
 
     /** The TV's Settings: Fire OS's own screen by name on a Fire TV (it stays open under the Home button watch, #75), else Android's Settings action. */
     private fun tvSettingsIntent(): Intent = FireWatch.amazonSettings(packageManager) ?: Intent(Settings.ACTION_SETTINGS)
 
-    /** Starts a Settings screen and lets the Home button watch know it was asked for (#123). */
+    /** Starts a Settings screen and lets the Home button watch know it was asked for (#123). The
+     *  Settings app keeps one task, so it is cleared: TV settings opens on its main menu and Bluetooth
+     *  on Bluetooth, not on whichever settings page was left open last time (Network, say). */
     private fun startSettings(i: Intent): Boolean {
         FireWatch.allowSettingsNow()
-        return start(i)
+        return start(i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK))
     }
 
     private fun start(i: Intent): Boolean = try {
@@ -1418,12 +1427,35 @@ class MainActivity : Activity() {
         val c = Canvas(bmp)
         c.drawColor(FLAP)
         if (banner != null) {
-            banner.setBounds(0, 0, 640, 360)
-            banner.draw(c)
+            drawBanner(banner, c)
         } else {
             iconTile(sharp(ri.activityInfo.packageName, ri.activityInfo.iconResource) ?: ri.loadIcon(packageManager), c)
         }
         return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it); bmp.recycle() }.toByteArray()
+    }
+
+    /**
+     * A TV banner is meant to be 16:9, and almost all are. One that is another shape (Prime Video on a
+     * Fire TV Stick looked squeezed, issue #181) keeps its proportions: it is fitted inside the tile
+     * and the gap is filled with its own edge colour, never stretched.
+     */
+    private fun drawBanner(banner: Drawable, c: Canvas) {
+        val w = banner.intrinsicWidth
+        val h = banner.intrinsicHeight
+        val ratio = if (w > 0 && h > 0) w.toFloat() / h else 16f / 9f
+        if (Math.abs(ratio - 16f / 9f) < 0.05f) {
+            banner.setBounds(0, 0, 640, 360)
+            banner.draw(c)
+            return
+        }
+        val tw = if (ratio >= 16f / 9f) 640 else (360 * ratio).toInt().coerceAtLeast(1)
+        val th = if (ratio >= 16f / 9f) (640 / ratio).toInt().coerceAtLeast(1) else 360
+        val src = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
+        banner.setBounds(0, 0, tw, th)
+        banner.draw(Canvas(src))
+        c.drawColor(src.getPixel(1, th / 2))
+        c.drawBitmap(src, ((640 - tw) / 2).toFloat(), ((360 - th) / 2).toFloat(), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        src.recycle()
     }
 
     /**

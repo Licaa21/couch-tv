@@ -33,6 +33,11 @@ Every response is JSON.
   - `404` not found (no show by that name, unknown screen id).
   - `503` the TV is not reachable right now (off at the wall, Wi-Fi). Show a gentle "TV not
     connected" state, the bridge keeps retrying on its own.
+- For translation, many answers also carry a message key beside the English text: `error_key` and
+  `error_vars` next to `error`, `note_key` and `note_vars` next to `note`, `reply_key` and
+  `reply_vars` next to an Ask `reply`, `reason_key` and `reason_vars` on a popular pick. The keys
+  are in `remote/src/i18n.js` and `tv-home/web/i18n.js`; a front end that has no translation for a
+  key shows the English text, which is always there and unchanged.
 
 ## Which TV (more than one TV)
 The bridge can run more than one TV. Every endpoint takes an optional TV id:
@@ -447,8 +452,13 @@ Also in every answer (since 27 Oct 2026, for a chat box):
   knowledge plus `find` (which of the home's apps it streams on), without touching the TV until
   the person says yes.
 - `tv` in the body (or `?tv=`) picks the TV, as everywhere else.
-- After 80 s the answer is "Still working on it, ..." with no options, and the job finishes in
-  the background; the next ask is told how it ended.
+- After 80 s the answer is "Still working on it, ..." with no options, `"still": true` and
+  `reply_key` `ask_still_working` (or `ask_still_working_doing`, with `reply_vars.doing`), and the
+  job finishes in the background; the next ask is told how it ended.
+- Claude answers in the TV home's language: `lang` in that TV's Home settings, else
+  `home.language` in `config.json`, else English. Only a code from the bridge's language list is
+  used, mapped to a fixed language name; anything else counts as English. Claude's picks write
+  their `reason` in the same language.
 
 ### `GET /api/recs`
 Claude's picks plus continue watching. Optional `?who=person1`. Fast: it returns the cached picks
@@ -479,6 +489,16 @@ are `POST /api/key` with `previous`, `play_pause` and `next`.
 {"ok": true, "music": {"title": "Golden Hour", "artist": "JVKE", "album": "this is what ____ feels like",
  "state": "playing", "app": {"id": "spotify", "name": "Spotify", "package": "com.spotify.tv.android"},
  "art": "https://is1-ssl.mzstatic.com/.../600x600bb.jpg", "position": 42.5, "duration": 215.0}}
+```
+
+### `GET /api/custom-cards`
+The household's own cards (`home.custom_cards`, docs/TV-HOME.md "Custom cards"), read from the file
+or link, cleaned and capped: at most 8, `title` (40 characters), optional `subtitle` (60), `value`
+(24), `image` (http or https) and either `app` (a package name) or `url` (http or https). The bridge
+reads the source at most once a minute and keeps the last good cards when it cannot. `[]` when the
+key is not set.
+```json
+{"ok": true, "cards": [{"title": "Solar today", "value": "18.4 kWh", "app": "com.example.solar"}]}
 ```
 
 ### `GET /api/continue`
@@ -624,7 +644,7 @@ is optional:
 
 | Key | What it is |
 |---|---|
-| `lang` | `en`, `es`, `es-MX`, `it`, `de`, `tr` or `sr-Latn-RS`. |
+| `lang` | `en`, `es`, `es-MX`, `it`, `de`, `tr`, `sr-Latn-RS`, `pl` or `pt`. |
 | `place` | The weather's place: `name`, `lat`, `lon` (rounded to two decimals, a town, never a house), `timezone`. |
 | `wx_show`, `wx_unit`, `wx_every` | Weather on or off, `c` or `f`, minutes between checks (15, 30 or 60). |
 | `look` | `night`, `oled` (the Classic grid on pure black) or `classic`. |
@@ -826,6 +846,11 @@ Every title object (find result, play, playing, continue, picks) carries `poster
 URLs. Credit "Data from JustWatch" somewhere quiet (their terms).
 
 ## Change notes
+- 2026-11-14: Custom cards (New): `GET /api/custom-cards`, and `home.custom_cards` in `/api/config` and
+  `/tv/config.js` (the link, or `true` for a file on the bridge computer).
+- 2026-11-14: Message keys (`error_key`, `note_key`, `reply_key`, `reason_key` and their `_vars`) beside the
+  unchanged English text; `still: true` on a soft timeout of `POST /api/ask`; Ask and Claude's picks answer in the
+  home's language (#196).
 - 2026-11-12: Kids mode (New): `GET|POST /api/kids`, `pin` on `POST /api/who` when leaving a kids
   profile, `403` from `POST /api/ask` for a kids profile, and `kids_mode` on people in `/api/config` and `/tv/config.js`.
 - 2026-11-12: Couch TV for Apple TV (New, Beta): `GET /api/appletv/hello`, `GET /api/appletv/apps`,
@@ -840,6 +865,10 @@ URLs. Credit "Data from JustWatch" somewhere quiet (their terms).
   country when they are not set).
 - Serbian: `lang` in `/api/settings` and `home.language` take `sr-Latn-RS` (24 hour clock and `RS`
   as the country when they are not set).
+- Polish: `lang` in `/api/settings` and `home.language` take `pl` (24 hour clock and `PL`
+  as the country when they are not set).
+- Brazilian Portuguese: the same keys take `pt` (24 hour clock and `BR` as the country when they
+  are not set).
 - Italian: `lang` in `/api/settings` and `home.language` take `it`. `home.clock` and
   `home.language` in `/api/config` and `/tv/config.js` are now there only when `config.json` sets
   them; without them the TV home follows the TV's own language and that language's usual clock.

@@ -18,6 +18,8 @@ TVs, see their pages, and so has Hisense VIDAA; Philips Titan OS has answered a 
 | Xiaomi TV Stick 4K (Android TV 11) | Yes (reported by a user, not tested by us) | Not reported | Not reported |
 | XGIMI projector (Android TV 11, XK03H) | Yes, through `apply.sh` (reported by a user, not tested by us) | Not reported | Yes (reported by a user: phone remote, keys, typing and apps; use `apply.sh` for the Home button) |
 | Bell Streamer (Bell Canada, Android TV 12) | **Beta**, untested (reported by Sparkybabcia, [#168](https://github.com/Seagey/couch-tv/issues/168)): Bell's Fibe TV app is the box's home, so `apply.sh` switches the Home button watch on. Fibe may flash up before couch-tv comes back. Opening Fibe from the couch-tv tile works; a Fibe button on the remote brings couch-tv back instead | Not reported | Not reported |
+| Epson LS300 projector (Android TV 14) | Yes on one unit (reported by mazzanfar, [#194](https://github.com/Seagey/couch-tv/pull/194), not tested by us): installed over paired Wireless debugging, apps, controls and a restart worked. That unit already had another launcher, so the Home button on stock firmware is unverified ([details](EPSON.md)) | Not tested | Not tested |
+| Epson LS650, LS800, and the Android TV streaming device that comes with the LS500 | **Beta**, untested: they run Android TV, but nobody has tried couch-tv on them yet ([details](EPSON.md#other-ls-models)) | Not tested | Not tested |
 | Nvidia Shield | Yes (not tested) | Yes | Yes (not tested) |
 | Onn (Google TV) | Yes | Yes | Partial |
 | Fire TV on Fire OS 6, 7 and 8 (Stick 4K 1st and 2nd gen, Stick 4K Max, Cube) | Partial | Partial | Partial (home screen confirmed on a Stick 4K 2nd gen by a user; phone remote keys blocked on current Fire OS) |
@@ -81,6 +83,10 @@ Not tested by the author. Each line is what someone said worked on their own dev
   `apply.sh` (option A), whose Home button watch works: a single Home press and a restart both come back to
   couch-tv. The projector has no Wireless debugging, only USB debugging, and that alone opens ADB on port
   5555, which `check-tv.py` reports (thanks nithinjak, [#159](https://github.com/Seagey/couch-tv/issues/159)).
+- **Hisense based VU TV FFM (Indian market, Android 11, MediaTek, Google TV home): works with option A**,
+  reported by Prabhakar92 on 0.12. The TV's own Google TV home shows for a few seconds at power on before
+  the Home button watch brings couch-tv forward, which is the documented behaviour
+  ([#187](https://github.com/Seagey/couch-tv/issues/187)).
 - **Hisense VIDAA, older firmware P0218: connects, pairs and opens couch-tv from a browser bookmark**, reported
   by trentosc. Navigation there is point and click, because the older TV Browser never passes the D pad to a
   page. Details: [VIDAA.md](VIDAA.md) (thanks trentosc, [#131](https://github.com/Seagey/couch-tv/issues/131)).
