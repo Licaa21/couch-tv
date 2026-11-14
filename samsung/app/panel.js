@@ -74,10 +74,13 @@
     var list = [];
     try { list = JSON.parse(window.TVOS.apps()); } catch (e) {}
     list = list.filter(function (a) { return a.package.indexOf("local.") !== 0; });
+    var store = null;   // Samsung's own Apps goes first, ahead of the A to Z
+    try { store = window.TVOS.storeApp ? JSON.parse(window.TVOS.storeApp()) : null; } catch (e) {}
     var loc = window.I18N ? window.I18N.locale() : "en";
     list.sort(function (a, b) { return String(a.label).localeCompare(String(b.label), loc, { sensitivity: "base" }); });
     var present = {};
     list.forEach(function (a) { a.letter = letterOf(a.label); present[a.letter] = true; });
+    if (store) list.unshift({ package: store.package, label: store.label || t("apps"), letter: "" });   // Samsung's Apps, first
     var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
     popup = document.createElement("div");
     popup.id = "cp-apps";

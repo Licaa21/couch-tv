@@ -75,6 +75,16 @@
     shown.unshift({ package: WX, label: "Weather" });
     shown.unshift({ package: LIVE, label: "TV" });
   }
+  // Samsung's own Apps (its store): found in this TV's list by its name (in a few languages) or its id, else tried by the ids it is
+  // known to have had. It is the first tile of the Apps menu (panel.js) and is not in the dock.
+  var APPSTORE = "local.appstore", STORE_NAME = /^(apps|aplica[țtţ]ii|anwendungen|applications|aplicaciones|app|applicazioni|toepassingen|aplikacje|uygulamalar|приложения)$/i;
+  var STORE_IDS = ["org.tizen.smartapps", "org.tizen.apps", "org.tizen.tvapps", "com.samsung.tv.appstore", "org.tizen.appstore", "org.tizen.smarthub-apps"];
+  function storeApp() {
+    var hit = tizenApps.filter(function (a) {
+      return a.id !== SELF && (STORE_NAME.test(String(a.name || "").trim()) || /^org\.tizen\.(smart)?apps?$/i.test(a.id || "")) && !STORE.test(a.packageId || "");
+    }).sort(function (a, b) { return (b.show !== false) - (a.show !== false); })[0];
+    return hit || null;
+  }
   var SKY = "local.sky", LIVE = "local.tv", WX = "local.weather", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
   function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
   sortOut();
@@ -252,6 +262,14 @@
     if (pkg === LIVE) return openInput("tv");
     if (pkg === WX) { if (window.WeatherTV) window.WeatherTV.open(); return true; }
     if (pkg === "com.android.tv.settings") return openTvSettings();   // the gear menu's "TV settings"
+    if (pkg === APPSTORE) {
+      var st = storeApp(), sids = (st ? [st.id] : []).concat(STORE_IDS.filter(function (id) { return !st || id !== st.id; }));
+      (function tryStore(i) {
+        if (i >= sids.length) { skyNote(t("store_none")); return; }
+        try { tizen.application.launch(sids[i], function () { send("log", "apps store: " + sids[i]); }, function () { tryStore(i + 1); }); } catch (e) { tryStore(i + 1); }
+      })(0);
+      return true;
+    }
     var a = byPkg[pkg], m = MAP[pkg];
     var ids = a ? [a.id] : [];
     if (m) (m.ids || []).concat(m.app ? [m.app] : []).forEach(function (id) { if (ids.indexOf(id) < 0) ids.push(id); });
@@ -279,6 +297,11 @@
 
   function iconUrl(pkg) {
     if (pkg === SKY) return "logo-sky.png";
+    if (pkg === APPSTORE) {
+      var sa = storeApp();
+      if (sa && sa.iconPath) return /^[a-z]+:/.test(sa.iconPath) ? sa.iconPath : "file://" + sa.iconPath;
+      return tileIcon('<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>', "#ff6a3d");
+    }
     if (pkg === WX) return tileIcon('<circle cx="9" cy="9" r="3.4"/><path d="M9 2.5v1.6M9 13.9v1.6M2.5 9h1.6M15 9h1.6M4.4 4.4l1.1 1.1M12.5 12.5l1.1 1.1M13.6 4.4l-1.1 1.1M5.5 12.5l-1.1 1.1"/><path d="M9.5 20h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.4-1.2A4.1 4.1 0 0 0 9.5 20z"/>', "#2d7ff9");
     if (pkg === LIVE) return tileIcon('<rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/>', "#0a84ff");
     var m = MAP[pkg];
@@ -310,6 +333,7 @@
     },
     launch: launch,
     iconUrl: iconUrl,
+    storeApp: function () { var a = storeApp(); return JSON.stringify({ package: APPSTORE, label: a ? a.name : "" }); },
     bannerUrl: function () { return null; },
     kept: function (k) { try { return localStorage.getItem("tvos." + k); } catch (e) { return null; } },
     keep: function (k, v) { try { localStorage.setItem("tvos." + k, v); } catch (e) {} },

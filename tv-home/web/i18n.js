@@ -152,6 +152,7 @@
     gear_tv: "TV settings",
     gear_tv_sub: "Wi-Fi, picture, sound and the rest of the TV",
     tv_settings_none: "This TV's own settings could not be opened.",
+    store_none: "Samsung's Apps did not open on this TV.",
 
     // ---- the settings screen ----
     set_title: "Home settings",
@@ -4315,6 +4316,7 @@
     gear_tv: "Setările televizorului",
     gear_tv_sub: "Wi-Fi, imagine, sunet și restul televizorului",
     tv_settings_none: "Setările proprii ale acestui televizor nu au putut fi deschise.",
+    store_none: "Aplicațiile Samsung nu s-au deschis pe acest televizor.",
 
     // ---- ecranul de setări ----
     set_title: "Setările ecranului principal",
