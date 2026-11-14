@@ -637,7 +637,8 @@
     var hm = CLOCK24 ? (h < 10 ? "0" : "") + h + ":" + mm : (h % 12 || 12) + ":" + mm;
     $("time").innerHTML = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
     var loc = window.I18N ? window.I18N.locale() : "en-AU";
-    var day = d.toLocaleDateString(loc, { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
+    // the day's name, a comma, then the date: "Sâmbătă, 14 noiembrie" (the one formatter puts them together in each language's own way)
+    var day = d.toLocaleDateString(loc, { weekday: "long" }) + ", " + d.toLocaleDateString(loc, { day: "numeric", month: "long" });
     day = day.charAt(0).toUpperCase() + day.slice(1);   // "lunes 27 de octubre" starts a line on screen
     var w = NIGHT && WX_SHOW && data.weather && data.weather.temp != null ? data.weather : null;
     $("date").innerHTML = '<span class="dline">' + esc(day) + (w ? '<span class="wx">' + wxIcon(w) + esc(tempText(w.temp)) +
