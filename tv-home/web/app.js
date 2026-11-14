@@ -1027,7 +1027,8 @@
     }
 
     var pos = solarAltitude(Number(WXCFG.lat), Number(WXCFG.lon), new Date());
-    var night = pos.alt < -6, wet = { storm: 1, snow: 1, rain: 1, drizzle: 1 }[kind];
+    // Night starts when the sun sets (-0.83 degrees: the weather's sunset time) if clouds hide the evening glow; a clear sky keeps its glow until -6
+    var night = pos.alt < (kind === "clear" || kind === "mostly" || !kind ? -6 : -0.83), wet = { storm: 1, snow: 1, rain: 1, drizzle: 1 }[kind];
     if (night) {
       if (kind === "mostly" || kind === "clear" || !kind) return pick(["night", "fog", "water", "golden", "dawn"]);
       return pick(["nightcloudy", "night", "fog", "water", "golden", "dawn"]);
