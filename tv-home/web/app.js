@@ -1975,6 +1975,7 @@
       }).join("");
     }
     renderPop();
+    fitDate();   // the picture or the names just changed size
   }
 
   function renderPop() {
@@ -5210,6 +5211,9 @@
     if (TV) data.apps = sortApps(nativeApps() || []);
     if (cached || TV) { render(); mark("home-painted-from-cache"); }
     document.documentElement.classList.add("home-ready");
+    // the date line steps clear of the picture and the buttons once they are laid out: at start they are not yet (it waited for the 15 s clock tick)
+    [200, 800, 2000, 5000].forEach(function (ms) { setTimeout(fitDate, ms); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitDate);
     if (NIGHT) $("np-slot").appendChild($("np"));   // Now playing: the first card of the row
     renderQuick();
     if (!OFFLINE) refreshQuick();
