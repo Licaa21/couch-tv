@@ -321,13 +321,16 @@
     clearTimeout(idlePhotoTimer);
     idlePhotoTimer = null;
     idlePhotoActive = false;
+    var wasIdle = document.documentElement.classList.contains("idle-photo");
     document.documentElement.classList.remove("idle-photo");
+    if (wasIdle) fitClocks();   // the row is back: the clock goes up again if it needs to
     if (!idlePhotoAllowed()) return;
     idlePhotoTimer = setTimeout(function () {
       idlePhotoTimer = null;
       if (!idlePhotoAllowed()) return;
       idlePhotoActive = true;
       document.documentElement.classList.add("idle-photo");
+      fitClocks();   // the row and the dock are gone: the clock goes back to its own place
     }, IDLE_PHOTO_SECONDS * 1000);
   }
   function idlePhotoInput(e) {
@@ -2404,7 +2407,7 @@
     if (!m) { m = document.createElement("i"); m.className = "bm"; m.style.cssText = "display:inline-block;width:0;height:0"; f.appendChild(m); }
     var base = m.getBoundingClientRect().bottom - lift0;
     var fs = parseFloat(getComputedStyle(c).fontSize) || 0, rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") ? 100000 : sec.getBoundingClientRect().top;
+    var sec = $("shelf-section"), rowTop = sec.classList.contains("empty") || document.documentElement.classList.contains("idle-photo") ? 100000 : sec.getBoundingClientRect().top;   // the row hidden by "hide after x seconds" does not hold the clock up
     var modal = modalBlocks();
     if (modal) {
       // A menu is up (widgets, Apps, weather): the row has gone, and only what actually sits under the digits, sideways as well as
