@@ -77,15 +77,11 @@
     var sa = storeApp();   // Samsung's Apps: a tile like the others, in the dock after TV and Weather (Home settings can move it)
     shown.splice(2, 0, { package: APPSTORE, label: sa && sa.name ? sa.name : "Apps" });
   }
-  // Samsung's own Apps (its store): found in this TV's list by its name (in a few languages) or its id, else tried by the ids it is
-  // known to have had. It is the first tile of the Apps menu (panel.js) and is not in the dock.
-  var APPSTORE = "local.appstore", STORE_NAME = /^(apps|aplica[țtţ]ii|anwendungen|applications|aplicaciones|app|applicazioni|toepassingen|aplikacje|uygulamalar|приложения)$/i;
-  var STORE_IDS = ["org.tizen.smartapps", "org.tizen.apps", "org.tizen.tvapps", "com.samsung.tv.appstore", "org.tizen.appstore", "org.tizen.smarthub-apps"];
+  // Samsung's own Apps (its store): its id is com.samsung.tv.store (the id Free My TV leaves out of the system apps it hides). Only that
+  // id is launched: guessed ids made the TV open another app. It is the first tile of the Apps menu (panel.js) and can be put in the dock.
+  var APPSTORE = "local.appstore", STORE_ID = "com.samsung.tv.store";
   function storeApp() {
-    var hit = tizenApps.filter(function (a) {
-      return a.id !== SELF && (STORE_NAME.test(String(a.name || "").trim()) || /^org\.tizen\.(smart)?apps?$/i.test(a.id || "")) && !STORE.test(a.packageId || "");
-    }).sort(function (a, b) { return (b.show !== false) - (a.show !== false); })[0];
-    return hit || null;
+    return tizenApps.filter(function (a) { return a.id === STORE_ID; })[0] || null;
   }
   var SKY = "local.sky", LIVE = "local.tv", WX = "local.weather", SKY_PORT = parseInt(S.sky_hdmi, 10) || 0, skyOn = false;
   function t(k, v) { return window.I18N ? window.I18N.t(k, v) : k; }
@@ -265,11 +261,8 @@
     if (pkg === WX) { if (window.WeatherTV) window.WeatherTV.open(); return true; }
     if (pkg === "com.android.tv.settings") return openTvSettings();   // the gear menu's "TV settings"
     if (pkg === APPSTORE) {
-      var st = storeApp(), sids = (st ? [st.id] : []).concat(STORE_IDS.filter(function (id) { return !st || id !== st.id; }));
-      (function tryStore(i) {
-        if (i >= sids.length) { skyNote(t("store_none")); return; }
-        try { tizen.application.launch(sids[i], function () { send("log", "apps store: " + sids[i]); }, function () { tryStore(i + 1); }); } catch (e) { tryStore(i + 1); }
-      })(0);
+      try { tizen.application.launch(STORE_ID, function () { send("log", "apps store opened"); }, function () { skyNote(t("store_none")); }); }
+      catch (e) { skyNote(t("store_none")); }
       return true;
     }
     var a = byPkg[pkg], m = MAP[pkg];
