@@ -3002,7 +3002,14 @@
     } else if (zone === "shelf") {
       if (dx < 0 && s === 0 && NIGHT && npReach()) { zone = "np"; npI = Math.max(0, npButtons().length - 1); }
       else if (dx) s = Math.max(0, Math.min(shelfEls.length - 1, s + dx));
-      else if (dy < 0) { if (peopleOn()) toPeople(); else if (!NIGHT && npReach()) zone = "np"; else if (hasQuick()) { zone = "quick"; qi = 0; } }
+      else if (dy < 0) {
+        // the Samsung app: a card on the right half goes up to the top-right buttons (the source one), one on the left to the picture
+        var sb = shelfEls[s] ? shelfEls[s].getBoundingClientRect() : null;
+        if (window.MoonfinTV && hasQuick() && sb && sb.left + sb.width / 2 > window.innerWidth / 2) { zone = "quick"; qi = Math.max(0, quickVisible().indexOf("input")); }
+        else if (peopleOn()) toPeople();
+        else if (!NIGHT && npReach()) zone = "np";
+        else if (hasQuick()) { zone = "quick"; qi = 0; }
+      }
       else if (dy > 0 && gridEls.length) {
         // land on the app under the show
         var b = shelfEls[s].getBoundingClientRect();
