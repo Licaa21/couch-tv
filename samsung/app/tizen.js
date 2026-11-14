@@ -292,6 +292,10 @@
 
   function iconUrl(pkg) {
     if (pkg === SKY) return "logo-sky.png";
+    if (pkg === storePkg()) {   // four tiles, the sign of "all apps" (the TV's own picture for it is just the word)
+      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="5.4" fill="#ff6a3d"/>' +
+        '<g fill="#fff"><rect x="4.6" y="4.6" width="6.2" height="6.2" rx="1.7"/><rect x="13.2" y="4.6" width="6.2" height="6.2" rx="1.7"/><rect x="4.6" y="13.2" width="6.2" height="6.2" rx="1.7"/><rect x="13.2" y="13.2" width="6.2" height="6.2" rx="1.7"/></g></svg>');
+    }
     if (pkg === WX) return tileIcon('<circle cx="9" cy="9" r="3.4"/><path d="M9 2.5v1.6M9 13.9v1.6M2.5 9h1.6M15 9h1.6M4.4 4.4l1.1 1.1M12.5 12.5l1.1 1.1M13.6 4.4l-1.1 1.1M5.5 12.5l-1.1 1.1"/><path d="M9.5 20h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.4-1.2A4.1 4.1 0 0 0 9.5 20z"/>', "#2d7ff9");
     if (pkg === LIVE) return tileIcon('<rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M8 22h8M8.5 2.5L12 6l3.5-3.5"/>', "#0a84ff");
     var m = MAP[pkg];
@@ -318,7 +322,8 @@
     // the TV tile's name is said in the language chosen, which is set after this file loads
     apps: function () {
       return JSON.stringify(shown.map(function (a) {
-        return a.package === LIVE ? { package: LIVE, label: t("tv_live") } : a.package === WX ? { package: WX, label: t("sec_weather") } : a;
+        return a.package === LIVE ? { package: LIVE, label: t("tv_live") } : a.package === WX ? { package: WX, label: t("sec_weather") } :
+          a.package === storePkg() ? { package: a.package, label: t("apps") } : a;   // Samsung's Apps in the language chosen ("Aplicații")
       }));
     },
     launch: launch,

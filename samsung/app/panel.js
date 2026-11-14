@@ -80,7 +80,7 @@
     list.sort(function (a, b) { return String(a.label).localeCompare(String(b.label), loc, { sensitivity: "base" }); });
     var present = {};
     list.forEach(function (a) { a.letter = letterOf(a.label); present[a.letter] = true; });
-    if (store) list.unshift({ package: store.package, label: store.label || t("apps"), letter: "" });   // Samsung's Apps, first
+    if (store) list.unshift({ package: store.package, label: t("apps"), letter: "" });   // Samsung's Apps, first
     var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
     popup = document.createElement("div");
     popup.id = "cp-apps";
