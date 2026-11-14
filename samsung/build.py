@@ -76,6 +76,13 @@ def main():
     index = os.path.join(stage, "index.html")
     with open(index) as f:
         html = f.read()
+    # Home Assistant, Fire (Vega) and the website's Spotify player all need a computer or another platform: not in this app
+    for gone in ("smarthome.js", "vega.js", "spotify-player.js"):
+        html = html.replace('<script src="%s"></script>\n' % gone, "")
+        try:
+            os.remove(os.path.join(stage, gone))
+        except OSError:
+            pass
     tag = '<script src="config.js"></script>'
     if tag not in html:
         raise SystemExit("tv-home/web/index.html no longer loads config.js; update samsung/build.py")
@@ -137,7 +144,10 @@ def main():
     if sky is not None and (not isinstance(sky, int) or isinstance(sky, bool) or not 1 <= sky <= 4):
         raise SystemExit(f"{tv_cfg['id']}: sky_hdmi must be a port number from 1 to 4, or left out")
     key = a.key or config.PAIRING_KEY
-    settings = {"bridge": a.bridge.rstrip("/"), "tv": a.tv, "log": a.log_url.rstrip("/"), "sky_hdmi": sky, "key": key}
+    with open(os.path.join(HERE, "VERSION"), encoding="utf-8") as vf:   # the release number, shown in Home settings > About
+        version = vf.read().strip()
+    settings = {"bridge": a.bridge.rstrip("/"), "tv": a.tv, "log": a.log_url.rstrip("/"), "sky_hdmi": sky, "key": key,
+                "version": version, "repo": "github.com/Licaa21/couch-tv"}
     with open(os.path.join(stage, "settings.js"), "w") as f:
         f.write("window.COUCH_TIZEN = " + json.dumps(settings) + ";\n")
     table = {}

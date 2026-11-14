@@ -335,6 +335,7 @@
     },
     launch: launch,
     iconUrl: iconUrl,
+    version: function () { return S.version || ""; },   // Home settings > About
     storeApp: function () { var a = storeApp(); return JSON.stringify({ package: APPSTORE, label: a ? a.name : "" }); },
     bannerUrl: function () { return null; },
     kept: function (k) { try { return localStorage.getItem("tvos." + k); } catch (e) { return null; } },

@@ -59,6 +59,7 @@
   var CFG = {}, HOME = {}, TVCFG = {}, QUICK = [];
   var WXCFG = { lat: -33.8688, lon: 151.2093, place: "Sydney", timezone: "Australia/Sydney" };
   var QUICK_ALL = ["sleep", "picture", "look", "soundscape", "screen_off", "headphones", "input", "bluetooth", "network", "tvsettings", "screensaver", "extend"];
+  if (window.MoonfinTV) QUICK_ALL = ["look", "soundscape", "screen_off", "input", "tvsettings"];   // the Samsung app: what needs no computer
   // The most personal photos this TV keeps (also MAX_PHOTOS in bridge/server.py and MainActivity.kt).
   var MAX_PHOTOS = 50;
   var ON_TV = false;   // served by the on-TV app (config "mode"), which can open the TV's own settings screens
@@ -3427,7 +3428,7 @@
     ["apps", "apps"], ["people", "person"], ["quick", "bolt"], ["about", "info"]];
   var SET = { col: "secs", sec: 0, ri: 0, keyFocus: null, sub: null, lift: null, confirm: null, dirty: false, typing: null,
     msg: "", geo: { q: "", list: null, busy: false, err: false } };
-  var REPO_URL = "github.com/Seagey/couch-tv";
+  var REPO_URL = (window.COUCH_TIZEN && window.COUCH_TIZEN.repo) || "github.com/Seagey/couch-tv";   // the Samsung build says its own fork
   var WX_DEFAULT = { lat: -33.8688, lon: 151.2093, place: "Sydney", timezone: "Australia/Sydney" };
   var pushTimer = null;
 
@@ -3575,7 +3576,7 @@
         if (CLOCK24 !== clock24()) { CLOCK24 = !CLOCK24; glassShown = ""; clock(); }
       } };
     }) : [];
-    rows.push(info("lang-note", t("lang_note")));
+    if (!window.MoonfinTV) rows.push(info("lang-note", t("lang_note")));   // the phone remote
     return rows;
   }
 
@@ -3758,10 +3759,13 @@
         IDLE_PHOTO_SECONDS = IDLE_PHOTO_STEPS[(i + 1) % IDLE_PHOTO_STEPS.length];
         ST.idle_photo_seconds = IDLE_PHOTO_SECONDS; saveSettings(); resetIdlePhoto();
       } });
+    if (!window.MoonfinTV) {   // Google TV's screensaver albums: not on the Samsung app
     // the TV's own screensaver (Google TV's Ambient mode) and the albums it shows
     rows.push(head(t("ambient_head")));
     rows.push({ kind: "action", key: "ambient", label: t("ambient_settings"), sub: t("ambient_settings_sub"),
       act: function () { openAmbientSettings(); } });
+    }
+    if (!window.MoonfinTV) {   // smart idle (pausing and switching off other devices): not on the Samsung app
     // Smart Idle & OLED-safe Ambient Mode
     rows.push(head(t("smart_idle_head")));
     rows.push({ kind: "toggle", key: "smart-idle-on", label: t("smart_idle_on"), sub: t("smart_idle_on_sub"),
@@ -3792,6 +3796,7 @@
         SMART_IDLE.quiet_hours.enabled = !SMART_IDLE.quiet_hours.enabled;
         ST.smart_idle = SMART_IDLE; saveSettings(); renderSettings();
       } });
+    }
     rows.push(head(t("soundscape")));
     var curSound = window.Soundscape ? window.Soundscape.current() : SOUND_TYPE;
     rows.push({
@@ -3888,6 +3893,7 @@
     } });
     rows.push(info("video-note", t("video_note")));
     // Now playing (#31): the card with the song and its buttons; it needs the computer or the on-TV app
+    if (!window.MoonfinTV) {   // Now playing needs the computer: not on the Samsung app
     rows.push(head(t("np_head")));
     rows.push({ kind: "toggle", key: "now-playing", label: t("np_show"), value: NP_ON ? t("on") : t("off"), act: function () {
       NP_ON = !NP_ON; ST.now_playing = NP_ON; saveSettings(); refreshMusic();
@@ -3896,6 +3902,7 @@
       AMBIENT_MUSIC = !AMBIENT_MUSIC; ST.ambient_music = AMBIENT_MUSIC; saveSettings(); renderAmbientMusic();
     } });
     rows.push(info("np-note", t(OFFLINE ? "np_note_offline" : "np_note")));
+    }
     rows.push(head(t("photos_head")));
     rows.push(info("photos-count", photoCountText()));
     if (canPick()) rows.push({ kind: "action", key: "photo-pick", label: t("photos_pick"), sub: t("photos_pick_sub"), act: pickPhotos });
@@ -4230,12 +4237,11 @@
     else if (hs === "google_tv") homeRows.push(info("make-home", t("home_row"), "", t("home_google_tv")));
     return homeRows.concat([
       info("ver", t("about_version"), ver || t("about_web")),
-      info("code", t("about_code"), REPO_URL),
-      info("run", t("about_running"), t(run)),
+      info("code", t("about_code"), REPO_URL)].concat(window.MoonfinTV ? [] : [info("run", t("about_running"), t(run))]).concat([
       info("kept", t("about_kept"), t(OFFLINE || data.bridge === false ? "kept_tv" : "kept_both")),
       { kind: "action", key: "reset", label: t("about_reset"), sub: t("about_reset_sub"), danger: true, confirmText: t("confirm_reset"),
         act: resetSettings }
-    ]);
+    ]));
   }
   // ---- updates: couch-tv's own GitHub releases (the launcher's Updater.kt) ----
   // The launcher looks once a day while the home is on screen (switch below); "Check now" looks
