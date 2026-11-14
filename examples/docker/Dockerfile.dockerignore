@@ -1,4 +1,0 @@
-# The image only needs bridge/requirements.txt and the entrypoint; the repo is mounted at run time.
-*
-!bridge/requirements.txt
-!examples/docker/entrypoint.sh
