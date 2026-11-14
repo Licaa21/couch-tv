@@ -2389,6 +2389,12 @@
     if (!window.MoonfinTV) return;
     var cs = el.querySelectorAll(".gclock"), c = cs[0], f = c && c.querySelector(".fill"), q;
     if (!f) return;
+    var own = SCENES[sceneEls.indexOf(el)];
+    if (own && own.id === "fog") {   // the Fog clock never moves: its place is part of the picture
+      if (el.style.getPropertyValue("--cdy") !== "0px") el.style.setProperty("--cdy", "0px");
+      if (el.classList.contains("on") && document.documentElement.style.getPropertyValue("--cdy-r") !== "0px") document.documentElement.style.setProperty("--cdy-r", "0px");
+      return;
+    }
     for (q = 0; q < cs.length; q++) cs[q].style.fontSize = "";   // (an older build made it smaller; it no longer does)
     // Where the digits sit when not raised: measured as they are now, less the lift they have (or are in the middle of making),
     // so the move from one place to the next is a transition and not a jump.
