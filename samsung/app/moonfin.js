@@ -265,7 +265,7 @@
   // A card was opened: Moonfin gets the title the way Samsung's Smart Hub hands one to it.
   function launchOnce(row, app) {
     try {
-      var data = [new tizen.ApplicationControlData("PAYLOAD", [JSON.stringify({ values: JSON.stringify(row.jf) })])];
+      var data = [new tizen.ApplicationControlData("PAYLOAD", [JSON.stringify({ values: JSON.stringify(Object.assign({ n: Date.now() }, row.jf)) })])];
       var ctl = new tizen.ApplicationControl("http://samsung.com/appcontrol/operation/eden_resume", null, null, null, data);
       tizen.application.launchAppControl(ctl, app, function () {}, function () { toast(t("jf_no_moonfin")); });
     } catch (e) { toast(t("jf_no_moonfin")); }
