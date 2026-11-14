@@ -4032,6 +4032,9 @@
     var arr = arrangeItems(), rows = [];
     var hidden = data.apps.filter(function (a) { return HIDDEN_TV.indexOf(a.package) >= 0; });
     // The More apps tile at the end of the dock can be taken away (apps below the line then only live in this list)
+    if (window.MoonfinTV) rows.push({ kind: "toggle", key: "come-back", label: t("come_back"), sub: t("come_back_sub"), value: ST.come_back === false ? t("off") : t("on"), act: function () {
+      ST.come_back = ST.come_back === false; saveSettings();
+    } });
     rows.push({ kind: "toggle", key: "more-btn", label: t("more_btn"), sub: MORE_ON ? "" : t("more_btn_off"), value: MORE_ON ? t("on") : t("off"), act: function () {
       MORE_ON = !MORE_ON; ST.more_button = MORE_ON; saveSettings(); expanded = false; renderGrid();
     } });

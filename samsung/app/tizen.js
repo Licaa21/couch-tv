@@ -10,6 +10,65 @@
   var S = window.COUCH_TIZEN || {};
   var MAP = window.COUCH_TIZEN_APPS || {};
   var SELF = "CouchTVApp.Home";
+
+  // ---------- coming back here when an app opened from here closes ----------
+  // Free My TV's "Home button" way: while an app opened from here is in front, the TV's own server on port 8001 is asked every 0.4 s
+  // whether it is still visible (GET /api/v2/applications/<id> answers {running, visible}); once it has been seen and then is not (it was
+  // closed, or Home was pressed), this app is brought to the front again. Nothing is asked while this app is in front, an app the server
+  // does not know is left alone, and an app that was never seen visible (YouTube by its Tizen id says "no" even in front) never brings it back.
+  var HUB_IDS = {   // the numbers Smart Hub knows these by (Free My TV's list)
+    "org.tizen.netflix-app": "3201907018807", "org.tizen.primevideo": "3201910019365", "com.samsung.tv.aria-video": "3201807016597",
+    "org.tizen.globoplayapp": "3202007021424", "9Ur5IzDKqV.TizenYouTube": "111299001912", "MCmYXNxgcu.DisneyPlus": "3201901017640",
+    "rJeHak5zRg.Spotify": "3201606009684", "GHI3a0zMSx.XboxGamePass": "3202203026799", "IkWsFHtOY9.Stremio": "3202306031311",
+    "OGLLvqej7u.CrunchyrollWebApp": "3202302030097", "5b8c3eb16b.BeamCTVDev": "3202301029760"
+  };
+  var back = { timer: null, ids: [], seen: false, asks: 0, waits: 0, gone: 0, asking: false, away: false };
+  function comeBackOn() {
+    try { var st = JSON.parse(localStorage.getItem("tvos.tvhome.settings") || "{}"); return !(st.s && st.s.come_back === false); } catch (e) { return true; }
+  }
+  function stopWatch() { if (back.timer) clearInterval(back.timer); back.timer = null; }
+  function visibleNow(ids, done) {   // done(true | false) for the first id the server knows, done(null) if it knows none, done(undefined) on no answer
+    var i = 0;
+    (function next() {
+      if (i >= ids.length) { done(null); return; }
+      var x = new XMLHttpRequest(), over = false, id = ids[i++];
+      x.open("GET", "http://127.0.0.1:8001/api/v2/applications/" + encodeURIComponent(id), true);
+      x.timeout = 1500;
+      x.onreadystatechange = function () {
+        if (x.readyState !== 4 || over) return;
+        over = true;
+        var r = null;
+        try { r = JSON.parse(x.responseText); } catch (e) {}
+        if (x.status === 200 && r && typeof r.visible === "boolean") { ids.length = 0; ids.push(id); done(r.visible); } else next();
+      };
+      x.ontimeout = x.onerror = function () { if (!over) { over = true; done(undefined); } };
+      x.send();
+    })();
+  }
+  function comeBack() { try { tizen.application.launch(SELF, function () {}, function () {}); } catch (e) {} }
+  function watchBack(id) {
+    try { watchBack2(id); } catch (e) { send("log", "watch: " + e); }   // a watcher that fails must never stop an app from opening
+  }
+  function watchBack2(id) {
+    stopWatch();
+    if (!id || !comeBackOn()) return;
+    back.ids = HUB_IDS[id] ? [HUB_IDS[id], id] : [id];
+    back.seen = false; back.away = false; back.asks = 0; back.waits = 0; back.gone = 0; back.asking = false;
+    back.timer = setInterval(function () {
+      if (!document.hidden) { if (back.away || ++back.waits > 50) stopWatch(); return; }   // back here, or it never opened (20 s): nothing to watch
+      back.away = true;
+      if (back.asking) return;
+      if (++back.asks > 50 && !back.seen) { stopWatch(); return; }
+      back.asking = true;
+      visibleNow(back.ids, function (on) {
+        back.asking = false;
+        if (!back.timer) return;
+        if (on === null) { stopWatch(); return; }
+        if (on === true) { back.seen = true; back.gone = 0; return; }
+        if (on === false && back.seen && document.hidden && ++back.gone >= 2) { stopWatch(); comeBack(); }   // twice: one "no" in the middle of a film must not bring the home over it
+      });
+    }, 400);
+  }
   var BRIDGE = ((location.search.match(/[?&]api=([^&]+)/) || [])[1] || "");
   BRIDGE = decodeURIComponent(BRIDGE);
   var TV_ID = (location.search.match(/[?&]tv=([a-z0-9-]+)/) || [])[1] || "";
@@ -163,7 +222,7 @@
     function go(src) {
       try {
         tizen.tvwindow.setSource(src, function () {
-          try { tizen.application.launch(VIEWER, function () { skyOn = false; }, inFront); } catch (e) { inFront(); }
+          try { tizen.application.launch(VIEWER, function () { skyOn = false; watchBack(VIEWER); }, inFront); } catch (e) { inFront(); }
         }, function (e) { failed("setSource", e); });
       } catch (e) { failed("setSource", e); }
     }
@@ -276,7 +335,7 @@
     (function attempt(i) {
       if (i >= ids.length) { send("log", "launch failed for " + pkg + ", asking the bridge"); bridgeLaunch(pkg); return; }
       try {
-        tizen.application.launch(ids[i], function () { send("log", "launched " + ids[i]); },
+        tizen.application.launch(ids[i], function () { send("log", "launched " + ids[i]); watchBack(ids[i]); },
           function (err) { send("log", "launch " + ids[i] + ": " + (err && err.name)); attempt(i + 1); });
       } catch (e) { send("log", "launch " + ids[i] + " threw " + e); attempt(i + 1); }
     })(0);
@@ -328,6 +387,7 @@
     },
     launch: launch,
     iconUrl: iconUrl,
+    watchApp: watchBack,   // moonfin.js: the app a card opened
     version: function () { return S.version || ""; },   // Home settings > About
     storeApp: function () { var a = storeApp(); return JSON.stringify({ package: storePkg(), label: a ? a.name : "" }); },
     bannerUrl: function () { return null; },

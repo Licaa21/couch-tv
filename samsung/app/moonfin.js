@@ -267,7 +267,7 @@
     try {
       var data = [new tizen.ApplicationControlData("PAYLOAD", [JSON.stringify({ values: JSON.stringify(Object.assign({ n: Date.now() }, row.jf)) })])];
       var ctl = new tizen.ApplicationControl("http://samsung.com/appcontrol/operation/eden_resume", null, null, null, data);
-      tizen.application.launchAppControl(ctl, app, function () {}, function () { toast(t("jf_no_moonfin")); });
+      tizen.application.launchAppControl(ctl, app, function () { if (window.TVOS && window.TVOS.watchApp) window.TVOS.watchApp(app); }, function () { toast(t("jf_no_moonfin")); });
     } catch (e) { toast(t("jf_no_moonfin")); }
   }
   function open(id) {
