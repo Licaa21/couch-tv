@@ -6,7 +6,7 @@ const sb = { window: {}, navigator: { language: "en" }, document: { documentElem
 sb.window = sb; vm.createContext(sb); vm.runInContext(src, sb);
 const S = sb.__S;
 const ph = s => (String(s).match(/\{\w+\}/g) || []).sort().join(",");
-const skip = /^(err_|note_)/;   // the bridge's words stay English on purpose (CLAUDE.local.md)
+const skip = /^(err_|note_|upd_)/;   // the bridge's words and the Updates section (Android only, not in the Samsung app) stay English on purpose (CLAUDE.local.md)
 const bad = [];
 Object.keys(S.en).forEach(k => {
   if (skip.test(k)) return;

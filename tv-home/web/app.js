@@ -113,7 +113,7 @@
   var IDLE_PHOTO_SECONDS = 0, idlePhotoTimer = null, idlePhotoActive = false;
   var WX_AMBIENT = true, WX_SUN_GRADE = true;
   // Now playing (#31), on unless switched off; the navigation sound: system, soft or off (#32)
-  var NP_ON = true, KW_ON = true, SOUND_STYLE = "system";
+  var NP_ON = true, KW_ON = true, SOUND_STYLE = "system", START_FOCUS = "people";
   // Ambient sleep soundscapes (rain, fire, waves, brown noise)
   var SOUND_TYPE = "off", SOUND_VOL = 0.5, SOUND_FADE_SLEEP = true;
   function initSoundscape() {
@@ -424,6 +424,7 @@
     document.documentElement.classList.toggle("glass-icons", GLASS_ICONS);
     GLASS_AMT = glassAmount();
     CLOCK_LIQUID = (ST.clock_style || HOME.clock_style) === "liquid";
+    START_FOCUS = ["people", "apps", "keep_watching"].indexOf(ST.start_focus || HOME.start_focus) >= 0 ? (ST.start_focus || HOME.start_focus) : "people";
     glassClasses();
     // a link set in Home settings wins over home.video_url; one from config.json alone means on
     VIDEO_URL = typeof ST.video_url === "string" ? ST.video_url : typeof HOME.video_url === "string" ? HOME.video_url : "";
@@ -471,8 +472,10 @@
   // Lighter home: ask for the 640 px size of a Keep watching picture, not the 1440 px one (a card is about 500 px wide)
   function slim(u) { return LIGHTER && typeof u === "string" ? u.replace("/s1440/", "/s640/") : u; }
   function glassSetting() { var g = ST.glass || HOME.glass; return g === "on" || g === "lite" ? g : "off"; }
-  // no clock in Home settings or config.json: the one usual for the language (24 hour in Italian, German, Turkish, French, Serbian, Polish and Brazilian Portuguese)
-  function clock24() { return (ST.clock || HOME.clock || (window.I18N ? window.I18N.clock() : "12h")) === "24h"; }
+  // no clock in Home settings or config.json: the TV's own setting, else the one usual for the language (24 hour in Italian, German, Turkish, French, Serbian, Polish and Brazilian Portuguese)
+  // On the Android home the TV's own 12 or 24 hour setting (System, Date and time) comes before the language's usual clock (#221)
+  function systemClock() { try { if (TV && typeof TV.is24Hour === "function") return TV.is24Hour() ? "24h" : "12h"; } catch (e) {} return ""; }
+  function clock24() { return (ST.clock || HOME.clock || systemClock() || (window.I18N ? window.I18N.clock() : "12h")) === "24h"; }
 
   // ---------------- helpers ----------------
   function esc(v) { return String(v == null ? "" : v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -2492,8 +2495,19 @@
   }
   function openCard(c) {
     if (!c || (!c.app && !c.url)) return;
-    if (c.app && TV && TV.launch(c.app)) return;
-    if (OFFLINE) { status(t("computer_off")); return; }
+    if (c.app && TV && TV.launch && TV.launch(c.app)) return;
+    if (c.url && TV && TV.openUrl) {
+      if (TV.openUrl(c.url)) return;
+      status(t("err_philips_no_browser") || "No browser installed");
+      return;
+    }
+    if (OFFLINE) {
+      if (c.url && window.open) {
+        try { window.open(c.url, "_blank"); return; } catch (_) {}
+      }
+      status(t("computer_off"));
+      return;
+    }
     api("POST", "/api/launch", { app: c.app || c.url }).catch(function (e) { status(tBridge(e.key, e.vars, e.message)); });
   }
   function setCards(list) {
@@ -2508,7 +2522,7 @@
       paintFocus();
     }
   }
-  function refreshCards() {
+  function refreshCards(force) {
     var src = HOME.custom_cards, CC = window.CustomCards;
     if (!src || !CC) return;
     // a link: the on-TV app (or a home with no computer) reads it itself, so it needs CORS
@@ -2519,7 +2533,8 @@
         .then(function (s) { setCards(s == null ? null : CC.parse(s)); }, function () {});
     };
     if (OFFLINE) { direct(); return; }
-    api("GET", "/api/custom-cards", null, 9000).then(function (j) { setCards(CC.clean(j.cards || [])); }, direct);
+    var q = force ? "?force=1" : "";
+    api("GET", "/api/custom-cards" + q, null, 9000).then(function (j) { setCards(CC.clean(j.cards || [])); }, direct);
   }
 
   // Keep watching with no computer: the one list the TV has (Android's Watch Next, or the Samsung app's Jellyfin row), the same for
@@ -2664,14 +2679,14 @@
   // config.json has a home_assistant section with rooms or scenes. Otherwise nothing changes.
   function smartOn() { return !!(window.smartHome && window.smartHome.available()); }
   function smartItem() { return { kind: "smart", name: t("smart_home"), package: "smart:home" }; }
-  // LG's own Developer Mode app, as a dock tile: it opens the app itself, so the Extend button and
+  // LG's own Developer Mode app, in More apps: it opens the app itself, so the Extend button and
   // the remaining days are there to use by hand (the quick button does the Extend for you).
   function devOn() { return devCan() && TVCFG.extend_devmode !== false; }
   function devItem() { return { kind: "devmode", name: t("dev_app"), package: "com.palmdts.devmode" }; }
   function toolItems() {
     var list = [];
     if (smartOn()) list.push(smartItem());
-    if (devOn()) list.push(devItem());
+    if (devOn() && expanded) list.push(devItem());
     list.push(gearItem());
     return list;
   }
@@ -2899,8 +2914,7 @@
       return '<div class="grow' + (i === smI ? " focus" : "") + '" role="menuitem"><span><b>' + esc(it.label) + "</b></span></div>";
     }).join("");
     pop.classList.add("on");
-    document.documentElement.classList.add("apping");
-    hintFlash = t("ctx_hint"); renderHint();
+    document.documentElement.classList.add("shelfmenu");
     var el = shelfEls[s], rem = innerWidth / 120;
     if (el) {
       var b = el.getBoundingClientRect(), w = pop.offsetWidth;
@@ -2910,8 +2924,7 @@
   }
   function closeShelfMenu() {
     $("app-pop").classList.remove("on");
-    document.documentElement.classList.remove("apping");
-    hintFlash = "";
+    document.documentElement.classList.remove("shelfmenu");
     if (zone === "shelfmenu") zone = "shelf";
   }
   function doShelfMenu() {
@@ -2959,7 +2972,7 @@
         zone = "shelf";
       }
       paintFocus();
-      flash(t("removed") || "Removed");
+      status(t("removed") || "Removed");
     };
 
     if (card) {
@@ -3105,7 +3118,7 @@
   // The small blue dot: an app not opened yet, or (on the gear tile) a new couch-tv release.
   function dotHTML(it) {
     if (isNew(it.package)) return '<i class="dot" aria-label="' + esc(t("new_app")) + '"></i>';
-    if (it.kind === "gear" && updReady()) return '<i class="dot" aria-label="' + esc(t("upd_gear", { v: UPD.latest })) + '"></i>';
+    if (it.kind === "gear" && updReady()) return '<i class="dot" aria-label="' + esc(t("upd_gear", { v: UPD.latest, c: UPD.current || "" })) + '"></i>';
     return "";
   }
 
@@ -3418,12 +3431,78 @@
     paintFocus();
   }
 
-  // Start on the people switch, so the first press picks who is watching.
+  // ---------------- going round at the ends ----------------
+  // A single press of an arrow at the end of a row or a list goes round to the other end: left on the
+  // first app lands on More apps, down on the last row of a Home settings list lands on its first row.
+  // It happens when the key is let go, and only for a press that did one thing: holding an arrow still
+  // runs to the end and stops there, even when it starts at the end. Some remotes send a held arrow
+  // as more key downs that are not marked as repeats, so every key down of the same arrow before it
+  // is let go counts as the same press (arrowPress), and a press longer than HOLD_MS never goes round.
+  var wrapPending = null, arrowPress = null;
+  // is this key down the arrow of the press still going (held), rather than a new press?
+  function arrowAgain(p, dir, now, repeat) { return !!(repeat || (p && p.dir === dir && now - p.last < 1000)); }
+  function navState() {
+    return [zone, g, s, pi, qi, npI, menuI, pmi, gi, amI, smI, ai, inI, ambI, expanded, !!lift, plift,
+      SET.col, SET.sec, SET.ri, !!SET.lift, !!SET.sub].join("|");
+  }
+  // where a list of n entries goes round to: forwards to the first, backwards to the last
+  function wrapIndex(n, d) { return d > 0 ? 0 : Math.max(0, n - 1); }
+  function wrapRound(dx, dy) {
+    if (document.documentElement.dir === "rtl") dx = -dx;
+    if (lift || plift || SET.lift) return;   // carrying something: the ends stay the ends
+    if (zone === "smart" || zone === "ambient") return;   // they keep their own focus
+    var d = dy || dx;
+    if (zone === "settings") {
+      if (!dy) return;   // left and right change a value or the column
+      if (SET.col === "secs") {
+        var n = wrapIndex(SECS.length, dy);
+        if (n !== SET.sec) { SET.sec = n; SET.sub = null; SET.msg = ""; SET.keyFocus = null; SET.ri = 0; }
+      } else {
+        var rows = rowsNow(), r = stepRow(rows, dy > 0 ? -1 : rows.length, dy);
+        if (r >= 0 && r < rows.length) { SET.ri = r; SET.keyFocus = rows[r].key; }
+      }
+      renderSettings();
+      return;
+    }
+    if (zone === "gear") { if (dy) { gi = wrapIndex(2, dy); renderGear(); } return; }
+    if (zone === "appmenu") { if (dy) { amI = wrapIndex(amItems.length, dy); renderAppMenu(); } return; }
+    if (zone === "shelfmenu") { if (dy) { smI = wrapIndex(smItems.length, dy); renderShelfMenu(); } return; }
+    if (zone === "updask") { if (dy) { ai = wrapIndex(2, dy); renderAsk(); } return; }
+    if (zone === "inputs") { if (dy) { inI = wrapIndex(inItems.length, dy); renderInputMenu(); } return; }
+    if (zone === "pmenu") { if (dy) { pmi = wrapIndex(PEOPLE.length, dy); renderPop(); } return; }
+    if (zone === "menu") { menuI = wrapIndex(SLEEP_CHOICES.length, d); paintFocus(); return; }
+    if (zone === "grid") {
+      if (dx) {   // along the row: the first app and the last tile (More apps) meet
+        var first = Math.floor(g / GRID_COLS) * GRID_COLS;
+        g = dx > 0 ? first : Math.min(first + GRID_COLS, gridEls.length) - 1;
+      } else if (dy > 0) {   // down from the very bottom: back to the top of the home
+        if (peopleOn()) toPeople();
+        else if (hasQuick()) { zone = "quick"; qi = 0; }
+        else if (shelfEls.length && !(NIGHT && expanded)) { zone = "shelf"; s = 0; }
+        else g = g % GRID_COLS;
+      }
+    } else if (zone === "shelf") {
+      if (dx) s = wrapIndex(shelfEls.length, dx);
+      else if (dy < 0 && gridEls.length) { zone = "grid"; g = 0; }   // nothing above the cards: round to the apps
+    } else if (zone === "people" || zone === "quick" || zone === "np") {
+      if (dy < 0 && gridEls.length) { zone = "grid"; g = 0; }      // up from the very top: round to the apps
+    }
+    paintFocus();
+  }
+
+  // Start on the chosen place (home.start_focus): people (default, as before), keep_watching or apps (#211).
   function startFocus() {
     s = 0; g = 0;
-    if (ambientOpen && AMBIENT_MUSIC && npVisible()) zone = "ambient";   // the music screen is up: the remote stays on it
-    else if (peopleCount() >= 2) toPeople();   // a lone person's picture is only shown, the remote starts on the row
-    else zone = shelfEls.length ? "shelf" : "grid";
+    if (ambientOpen && AMBIENT_MUSIC && npVisible()) {
+      zone = "ambient";   // the music screen is up: the remote stays on it
+    } else if (START_FOCUS === "apps") {
+      zone = "grid";
+    } else if (START_FOCUS === "people") {
+      if (peopleCount() >= 2) toPeople();   // a lone person's picture is only shown, the remote starts on the row (this fork)
+      else zone = shelfEls.length ? "shelf" : "grid";
+    } else {
+      zone = shelfEls.length ? "shelf" : "grid";
+    }
   }
 
   // Remember the focused row and tile (#166, thanks IshMehta), so a home that Android dropped while
@@ -3620,7 +3699,7 @@
   }
   function renderGear() {
     var pop = $("gear-pop");
-    var items = [[ICONS.sliders, t("gear_home"), updReady() ? t("upd_gear", { v: UPD.latest }) : t("gear_home_sub")],
+    var items = [[ICONS.sliders, t("gear_home"), updReady() ? t("upd_gear", { v: UPD.latest, c: UPD.current || "" }) : t("gear_home_sub")],
       [ICONS.gear, t("gear_tv"), t("gear_tv_sub")]];
     pop.innerHTML = items.map(function (it, i) {
       return '<div class="grow' + (i === gi ? " focus" : "") + '" role="menuitem"><i>' + it[0] + "</i><span><b>" + esc(it[1]) +
@@ -3767,6 +3846,7 @@
     }
     paintFocus();
     resetIdlePhoto();
+    refreshCards(true);
   }
 
   // ---- rows ----
@@ -4071,6 +4151,14 @@
       if (!KW_ON) { data.shows = []; shelfEls = []; s = 0; }
       renderShelf(); renderNp();
     } });
+    rows.push({ kind: "cycle", key: "start-focus", label: t("start_focus"), sub: t("start_focus_sub"),
+      value: t("start_focus_" + START_FOCUS), act: function () {
+        var steps = ["people", "keep_watching", "apps"];
+        var i = steps.indexOf(START_FOCUS);
+        START_FOCUS = steps[(i + 1) % steps.length];
+        ST.start_focus = START_FOCUS;
+        saveSettings();
+      } });
     rows.push({ kind: "toggle", key: "lighter", label: t("lighter"), value: LIGHTER ? t("on") : t("off"), act: function () {
       LIGHTER = !LIGHTER; ST.lighter = LIGHTER; saveSettings();
       document.documentElement.classList.toggle("lighter", LIGHTER); ambientSync(); movingTiles(); renderShelf(); paintFocus();
@@ -4470,9 +4558,16 @@
       info("ver", t("about_version"), ver || t("about_web")),
       info("code", t("about_code"), REPO_URL)].concat(window.MoonfinTV ? [] : [info("run", t("about_running"), t(run))]).concat([
       info("kept", t("about_kept"), t(OFFLINE || data.bridge === false ? "kept_tv" : "kept_both")),
+      { kind: "action", key: "restart", label: t("about_restart"), sub: t("about_restart_sub"), act: restartHome },
       { kind: "action", key: "reset", label: t("about_reset"), sub: t("about_reset_sub"), danger: true, confirmText: t("confirm_reset"),
         act: resetSettings }
     ]));
+  }
+  // About, Restart home: the launcher starts a new page and looks for the bridge again, as a
+  // force-stop would. Anywhere else (a browser, the on-TV app, an older launcher) the page reloads.
+  function restartHome() {
+    try { if (TV && TV.restartHome) { TV.restartHome(); return; } } catch (e) {}
+    restart();
   }
   // ---- updates: couch-tv's own GitHub releases (the launcher's Updater.kt) ----
   // The launcher looks once a day while the home is on screen (switch below); "Check now" looks
@@ -4488,7 +4583,9 @@
     try { if (u) UPD = JSON.parse(u.state()); } catch (e) {}
     return UPD;
   }
-  function updReady() { return !!(UPD && UPD.available); }
+  // A newer release is out: one this TV can install, or one a copy built on another computer can't
+  // take (refused), which still gets the dot and the line so the household hears about it.
+  function updReady() { return !!(UPD && (UPD.available || UPD.refused)); }
   // the launcher's news: a check finished, a download moved on, the installer answered
   function updChanged(s) {
     var was = updReady();
@@ -4501,7 +4598,7 @@
   function updTell() {
     if (!updReady() || kept("tvhome.update.told") === UPD.latest) return;
     keep("tvhome.update.told", UPD.latest);
-    status(t("upd_told", { v: UPD.latest }));
+    status(t("upd_told", { v: UPD.latest, c: UPD.current || "" }));
   }
   // Asked once: tell the household about new versions, or leave it to "Check for updates now"? Until
   // they answer nothing is checked by itself, so frequent releases never nag anyone who did not ask.
@@ -4603,6 +4700,7 @@
   function updateRows() {
     var u = updRead() || {}, busy = u.busy || "";
     var rows = [info("upd-ver", t("about_version"), u.current || "")];
+    if (u.latest) rows.push(info("upd-newest", t("upd_newest"), u.latest));   // both numbers side by side
     if (u.available) {
       rows.push({ kind: "action", key: "upd-install", label: t("upd_install", { v: u.latest }),
         sub: busy === "downloading" ? t("upd_downloading", { p: u.progress || 0 }) : busy === "installing" ? t("upd_confirm") : u.title || "",
@@ -4914,6 +5012,13 @@
       o.start(now); o.stop(now + 0.1);
     } catch (e) {}
   }
+  function warmSound() {
+    if (!SOUND || SOUND_STYLE !== "soft" || AC) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) AC = new Ctx();   // may start suspended until a key is pressed; softTick resumes it
+    } catch (e) {}
+  }
   function blip(dx, dy) {
     if (!SOUND || SOUND_STYLE === "off") return;
     if (SOUND_STYLE === "soft") { softTick(); return; }
@@ -5143,7 +5248,18 @@
       return;
     }
     var arrow = arrowOf(e);
-    if (arrow) { blip(arrow[0], arrow[1]); move(arrow[0], arrow[1]); }
+    if (arrow) {
+      blip(arrow[0], arrow[1]);
+      // the same arrow again before it was let go is the key being held, marked as a repeat or not
+      var dir = arrow[0] + "," + arrow[1], now = Date.now();
+      var again = arrowAgain(arrowPress, dir, now, e.repeat);
+      if (again && arrowPress) arrowPress.last = now;
+      else arrowPress = { dir: dir, at: now, last: now };
+      // the first key down of a press that moved nothing is at an end: it goes round when let go
+      var before = again ? null : navState();
+      move(arrow[0], arrow[1]);
+      wrapPending = before !== null && navState() === before ? { dx: arrow[0], dy: arrow[1] } : null;
+    }
     else if (isBack(e)) goHome();
     else if (isSettings(e)) { if (!e.repeat) settingsKey(); }   // the remote's own Settings/gear key
     else if (isMenu(e)) { if (!e.repeat) hold(); }   // optional: many remotes have no Menu key
@@ -5159,6 +5275,19 @@
       return;
     }
     if (kidsOn()) { if (isOk(e)) e.preventDefault(); okReset(); return; }
+    var arrow = arrowOf(e);
+    if (arrow) {   // the end of a single press at an end: go round (a held key cleared wrapPending)
+      var w = wrapPending, p = arrowPress;
+      wrapPending = null; arrowPress = null;
+      var quick = p && Date.now() - p.at <= HOLD_MS;
+      if (w && quick && w.dx === arrow[0] && w.dy === arrow[1] && !isTyping()) {
+        e.preventDefault();
+        wrapRound(w.dx, w.dy);
+        ensureFocus();
+        resetIdlePhoto();
+      }
+      return;
+    }
     if (!isOk(e) || isTyping()) return;
     e.preventDefault();
     if (!okDown) return;
@@ -5169,6 +5298,7 @@
     resetIdlePhoto();
   });
   window.addEventListener("blur", okReset);
+  window.addEventListener("blur", function () { wrapPending = null; arrowPress = null; });   // a key let go elsewhere
 
   // ---------------- data ----------------
   function nativeApps() {
@@ -5350,7 +5480,7 @@
     noDream: function () { note(t("no_dream")); },
     // the remote's Settings/gear key, caught by the launcher natively (MainActivity.dispatchKeyEvent)
     settingsKey: function () { blip(0, 0); settingsKey(); },
-    resume: function () { toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); refreshCards(); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
+    resume: function () { toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); refreshCards(true); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
     // an app is in front: the video background stops until the home is back
     pause: function () { saveFocusNow(); pauseVideo(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)
@@ -5406,6 +5536,10 @@
       var firstIdx = SCENES.map(function (s) { return s.own ? "own" : s.id; }).indexOf(first);
       showScene(firstIdx >= 0 ? firstIdx : pickSceneIdx());
       setInterval(sceneTick, 15000);   // the sun moves the picture, the clock changes the place
+      // the soft tap's audio context, made while the home is idle: made on the first key press it
+      // cost that press 112 ms on an LG NANO83 (webOS 26), so the first press after every return
+      // from an app lagged
+      setTimeout(warmSound, 2000);
       // the clock font must be in before the glass is measured
       if (document.fonts) document.fonts.load("300 10px Antonio").then(function () { glassShown = ""; clock(); });
       refreshWeather();

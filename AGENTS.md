@@ -143,7 +143,7 @@ Check the answer against [docs/TV-COMPATIBILITY.md](docs/TV-COMPATIBILITY.md):
   questions in step 2 still apply; skip picture mode, apply.sh and ADB).
 - **LG (webOS):** do not say no. Offer the LG path in [docs/LG.md](docs/LG.md) the way you offer
   the Samsung one, and say first, plainly, how little it has been tried: "There is an LG version
-  of couch-tv. It was built from LG's own documentation and has run on eleven real LGs so far (from
+  of couch-tv. It was built from LG's own documentation and has run on thirteen real LGs so far (from
   a 2018/2019 model on webOS 4.10 to a 2025 OLED on webOS 11.2), so on other LG models some of it may still need fixing. Like the Samsung one, it goes on your LG as an app, and a computer at home that
   stays on opens it every time the TV is switched on. It is not a true home screen: the remote's
   Home button still opens LG's menu. It needs LG's Developer Mode, which means a free LG developer
@@ -508,7 +508,7 @@ exactly what changes:
     allow` once, then switching both services on from the TV's own Settings, Accessibility with the
     remote (not by writing the setting over ADB) survived a real power cut, and TCL kept AUTO_START
     allowed. Which step matters is unknown, so on a TCL do both after `apply.sh`, and walk them
-    through the Accessibility switches on the TV. If the services are missing from that menu, launch the app once, then set the app op and write the settings over ADB: on that TCL they only appeared in the menu once bound. Also seen there: installing or removing any app made Android drop couch-tv as the preferred home (role holder unchanged); `cmd package set-home-activity` again fixed it, so re-assert it after installing anything. Fallback from a
+    through the Accessibility switches on the TV. If the services are missing from that menu, launch the app once, then set the app op and write the settings over ADB: on that TCL they only appeared in the menu once bound. Also seen there: installing or removing any app made Android drop couch-tv as the preferred home (role holder unchanged); `cmd package set-home-activity` again fixed it, so re-assert it after installing anything. **Second TCL (G08 AU02, Android 14, 0.12) did not hold across a real power cut:** the same steps survived a menu restart, but TCL reset AUTO_START to `ignore` about 20 s after boot (`Reject` while cached) and only KeyWatch bound, not FireWatch (not crashed, just unbound). `com.tcl.guard` has no AUTO_START switch. To rebind FireWatch there, write `enabled_accessibility_services` as KeyWatch alone, then KeyWatch:FireWatch; writing both at once did not rebind it. Fallback from a
     computer after each reboot, if that fails: `cmd package set-home-activity
     app.couchtv.launcher/.MainActivity`, start the app, `appops set app.couchtv.launcher AUTO_START
     allow`, then rewrite `enabled_accessibility_services` and `accessibility_enabled 1`. Separate and
