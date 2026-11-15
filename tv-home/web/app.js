@@ -5252,7 +5252,6 @@
 
   document.addEventListener("keydown", function (e) {
     lastKeyAt = Date.now();
-    if (window.AmbientWeather) window.AmbientWeather.hush(2500);   // rain and snow stand still while the rows move: a weak TV needs the frames for them
     resetSmartIdle();
     // Holding an arrow in Home settings sends a key about thirty times a second and each one redraws the
     // list, so on a slow TV they piled up and the focus ran off the screen. Repeats are spaced out, and the

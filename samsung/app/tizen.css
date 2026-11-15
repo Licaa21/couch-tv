@@ -298,7 +298,6 @@ html.wx-open #cp { opacity: 0.003; }
 html.cp-open #cp .cp-grid, html.cp-open #cp .cp-hint { visibility: visible; transition-delay: 0s; }
 html.cp-apps-open #cp .cp-grid, html.cp-apps-open #cp .cp-hint { visibility: hidden; }
 
-/* Lighter home hides the weather canvas on every other TV; here it stays, because the Samsung app draws it cheaply
-   (half the width and height, fewer drops and flakes, standing still while the rows move: ambient-weather.js). Switch it
-   off in Home settings, Weather, Ambient weather effects. */
+/* Lighter home hides the weather layers on every other TV; here they stay, because the Samsung app slides them as tiles on the graphics chip
+   (rain, snow and fog: ambient-weather.js, app.css "weather layers"). Switch them off in Home settings, Weather, Ambient weather effects. */
 html.lighter .weather-canvas, html.lighter .wx-layers.on { display: block !important; }
