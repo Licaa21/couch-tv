@@ -1065,14 +1065,20 @@
     var n = Date.now();
     return DAY_PREV && previewFrom ? window.Places.previewDate(n, previewFrom.real, previewFrom.virt, DAY_PREV) : new Date(n);
   }
-  function currentPhase() {
-    var d = sunDate(), P = window.Places;
+  function realPhase(d) {
+    var P = window.Places;
     if (WXCFG && WXCFG.lat != null && WXCFG.lon != null && isFinite(WXCFG.lat) && isFinite(WXCFG.lon)) {
       var lat = Number(WXCFG.lat), lon = Number(WXCFG.lon), pos = solarAltitude(lat, lon, d);
       var day = Math.floor((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 0))) / 86400000);
       return P.phaseFromSun(pos.alt, pos.hourAngle, P.maxAltitude(lat, day));
     }
     return P.phaseFromHour(d.getHours() + d.getMinutes() / 60);   // no place set for the weather: the hour of the day
+  }
+  function currentPhase() {
+    // Day preview: the six times of day take the same share of the preview each (a real day spends hours in the night and minutes in the
+    // sunrise, so at 1 minute a day the sunrise went by in 2 seconds and the fade could not keep up: it jumped)
+    if (DAY_PREV && previewFrom) return ((previewFrom.p0 + 6 * (Date.now() - previewFrom.real) / (DAY_PREV * 1000)) % 6 + 6) % 6;
+    return realPhase(new Date());
   }
   // What the sky asks for now: a picture set and a pair of times with the share of the second.
   function placeTarget() {
@@ -1272,7 +1278,7 @@
     var start = function () {
       if (started || previewToken !== token) return;   // another choice was made meanwhile
       started = true;
-      previewFrom = { real: Date.now(), virt: Date.now() }; previewTimer = setInterval(function () { sceneTick(true); }, 1000);
+      previewFrom = { real: Date.now(), virt: Date.now(), p0: realPhase(new Date()) }; previewTimer = setInterval(function () { sceneTick(true); }, 1000);
       sceneTick(true);
     };
     if (wx) {
