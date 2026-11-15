@@ -1157,7 +1157,10 @@
       if (Math.abs(T.pair.p - L.pB) >= (DAY_PREV ? 0.004 : 0.03)) { L.pB = T.pair.p; placeBlend(el, L.pB, DAY_PREV ? 1.2 : 4); }
       return;
     }
-    if (L.B && L.B.k === T.pair.a && L.pB > 0.9) return placeCommit(s, el, L, function () { placeUpdate(i); });       // the day moved on a step
+    if (L.B && L.B.k === T.pair.a && L.B.wx === T.wx) {   // the day moved on a step: finish the fade wherever a late tick left it (it used to fall into the weather path below: a hold, then a jump), then hand over
+      if (L.pB < 0.95) { L.pB = 1; placeBlend(el, 1, 1); return; }
+      return placeCommit(s, el, L, function () { placeUpdate(i); });
+    }
     if (L.A.k === T.pair.a && !L.B) {                                                                               // the next picture comes in under the first
       L.B = { wx: T.wx, k: T.pair.b }; L.pB = 0; L.busy = true;
       var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2");
@@ -1187,7 +1190,7 @@
   // The weather changed (or a setting did): first settle the drift on the nearest picture (8 s), then dissolve the new picture in over
   // WX_DISSOLVE seconds, then go on drifting.
   function placeDissolve(s, el, spec) {
-    var L = s.L, quick = L.guess && !!data.weather, secs = quick ? 3 : WX_DISSOLVE;   // the first weather after the start comes in quickly: it is a correction, not a change
+    var L = s.L, quick = L.guess && !!data.weather, secs = DAY_PREV ? 2 : quick ? 3 : WX_DISSOLVE, fold = DAY_PREV ? 1 : 8;   // the first weather after the start comes in quickly: it is a correction, not a change
     L.guess = false;
     L.busy = true;
     var next = function () {
@@ -1205,12 +1208,12 @@
     };
     if (L.B && L.pB > 0.02 && !quick) {   // fold the half way drift into one picture first
       var to = L.pB >= 0.5 ? 1 : 0;
-      placeBlend(el, to, 8);
+      placeBlend(el, to, fold);
       setTimeout(function () {
         if (s.L !== L) return;
         if (to) { L.busy = false; placeCommit(s, el, L, function () { L.busy = true; next(); }); }
         else { L.B = null; L.pB = 0; s.curB = ""; placeBlend(el, 0, 0); next(); }
-      }, 8300);
+      }, fold * 1000 + 300);
     } else next();
   }
 
