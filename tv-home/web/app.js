@@ -570,6 +570,7 @@
   // the extension). The
   // page is laid out at 1920x1080 but drawn at devicePixelRatio 2 there, so the 1080 files were
   // stretched and looked soft (couch-tv#8, a UHD LG). Your own scenes in mine/ have no 4K copy.
+  var PLACES_BASE = (window.COUCH_TIZEN && window.COUCH_TIZEN.places) || "backgrounds/";   // Samsung: where the places' pictures are (settings.js), else the local folder
   var HI_RES = (window.devicePixelRatio || 1) * window.innerWidth >= 3000;
   // home.hi_res "always" uses the 4K copies even when the page is drawn at 1080 (a 4K panel with a 1080 interface, #191)
   // home.hi_res false keeps the 1080 copies on a 4K screen whose chip struggles with 3840x2160 photos
@@ -660,7 +661,7 @@
     var iov = $("idle-ambient-overlay");
     if (iov) iov.classList.toggle("quiet-hours", isQuietHours(SMART_IDLE.quiet_hours));
     fitDate();
-    document.body.classList.toggle("night", (h >= 21 || h < 6) && !(NIGHT && SCENES[scene] && SCENES[scene].place));   // a place has night pictures of its own: no dimming filter over them
+    document.body.classList.toggle("night", h >= 21 || h < 6);   // the dimming skips a place's pictures (app.css: .scene.place), whatever scene is up
     if (NIGHT) { glassClock(hm); if (SUN_SYNC) applySunSync(); updateAmbientWeather(); }
     if (quickReady) renderQuick();
   }
@@ -764,12 +765,15 @@
     var box = $("scenes");
     sceneEls = SCENES.map(function (s) {
       var el = document.createElement("div");
-      el.className = "scene s-" + sceneClass(s);
+      el.className = "scene s-" + sceneClass(s) + (s.place ? " place" : "");
       el.innerHTML = '<img class="sbg" alt="">' + (s.place ? '<img class="sbg2" alt="">' : "") + (s.video ? '<video class="svid" muted loop playsinline preload="none"></video>' : "") +
         '<div class="shade"></div>' + (s.place && s.fg ? '<div class="cmask"><div class="gclock"></div></div>' : '<div class="gclock"></div>') +
         (s.water ? '<div class="gclock under"></div>' : "") + (s.fg && !s.place ? '<img class="fg" alt="">' : "");
       // A place's clock goes behind the scenery through a mask over the clock (backgrounds/places/<id>/mask.png, samsung/tools/make-place-masks.py),
       // not through a cut-out copy of every picture drawn over it: two full-screen layers fewer, half the downloads, and no seam along the ridge.
+      if (s.place) {   // no internet: the small local picture instead of nothing
+        el.querySelector(".sbg").onerror = function () { if (this.src.indexOf("thumb.jpg") < 0) this.src = "backgrounds/places/" + s.id + "/thumb.jpg"; };
+      }
       if (s.place && s.fg) { var cm = el.querySelector(".cmask"), mu = "url(backgrounds/places/" + s.id + "/mask.png)"; cm.style.webkitMaskImage = mu; cm.style.maskImage = mu; }
       if (s.mine) {   // your own scene: its clock from config.json (app.css, "your own scenes")
         el.className += " x-" + s.x + (s.inter ? " f-inter" : "") + (s.dark ? " t-dark" : "");
@@ -1040,7 +1044,7 @@
   var PLACE_EVERY_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 21600, 43200, 86400, 172800, 0];   // 0: never changes
   var WX_DISSOLVE_STEPS = [15, 30, 60], PREVIEW_STEPS = [0, 60, 180, 600];
   var PLACE_RES = "auto", PLACE_RES_STEPS = ["auto", "1080", "4k"];   // picture detail: auto follows the screen (HI_RES), or 1080p, or 4K (the @2x files)
-  var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), DAY_PREV = 0, previewFrom = null, previewTimer = null, previewImgs = [], lastTickAt = 0, changing = false;
+  var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), DAY_PREV = 0, previewFrom = null, previewTimer = null, previewImgs = [], previewToken = 0, lastTickAt = 0, changing = false;
 
   function stepOf(list, v, d) { return list.indexOf(v) >= 0 ? v : d; }
   function readPlaceSettings() {
@@ -1081,7 +1085,6 @@
   // 4K or 1080p pictures: <weather>-<time>@2x.jpg and -fg@2x.webp are the 4K ones (the glass copy is blurred, so one size does for both)
   function placeHi() { return PLACE_RES === "4k" || (PLACE_RES === "auto" && HI_RES); }
   // Samsung: the pictures are not in the app (303 MB would not install): settings.js says where they are (a pinned commit on jsDelivr); else the local folder
-  var PLACES_BASE = (window.COUCH_TIZEN && window.COUCH_TIZEN.places) || "backgrounds/";
   function placeUrl(key, ext) { return PLACES_BASE + key + (placeHi() ? ext.replace(/(\.\w+)$/, "@2x$1") : ext); }
   // The date line is dark on a bright sky and light on a dark one (places-meta.js, made by make-place-scenes.py: one 0 or 1 for each of the 30 pictures)
   function placeTone(s) {
@@ -1158,7 +1161,7 @@
       return;
     }
     if (L.B && L.B.k === T.pair.a && L.B.wx === T.wx) {   // the day moved on a step: finish the fade wherever a late tick left it (it used to fall into the weather path below: a hold, then a jump), then hand over
-      if (L.pB < 0.95) { L.pB = 1; placeBlend(el, 1, 1); return; }
+      if (L.pB < 0.95) { L.pB = 1; L.busy = true; placeBlend(el, 1, 1); setTimeout(function () { if (s.L !== L) return; L.busy = false; placeUpdate(i); }, 1200); return; }
       return placeCommit(s, el, L, function () { placeUpdate(i); });
     }
     if (L.A.k === T.pair.a && !L.B) {                                                                               // the next picture comes in under the first
@@ -1262,11 +1265,12 @@
     DAY_PREV = secs;
     clearInterval(previewTimer);
     previewFrom = null;
+    var token = ++previewToken;
     if (!secs) return sceneTick(true);
     // the six pictures of this place's weather are fetched first: a day passes in a minute, too fast to fetch each one as its turn comes
     var s = SCENES[scene], P = window.Places, wx = s && s.place ? placeTarget().wx : null, left = 0, started = false;
     var start = function () {
-      if (started || DAY_PREV !== secs) return;
+      if (started || previewToken !== token) return;   // another choice was made meanwhile
       started = true;
       previewFrom = { real: Date.now(), virt: Date.now() }; previewTimer = setInterval(function () { sceneTick(true); }, 1000);
       sceneTick(true);

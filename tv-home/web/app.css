@@ -343,7 +343,6 @@ html.still .tile.focus .face, html.still .tile.focus .face::after { animation: n
    and the dip through black when the place changes (app.js, "the places") */
 .scene .sbg2, .scene .fg2 { opacity: 0; }
 .has-video .scene .cmask { -webkit-mask-image: none !important; mask-image: none !important; }   /* the scenery is not drawn under a video background */
-.s-fog .gclock .fill { transition: filter 3s linear, opacity 3s linear; }   /* dark digits to light glass (below) without a jump */
 .scene .cmask { position: absolute; top: 0; right: 0; bottom: 0; left: 0; -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }   /* a place's clock behind its scenery (app.js buildScenes) */
 .gclock .fill.fillb { position: absolute; left: 0; right: 0; top: 0; display: none; opacity: 0; }   /* over the first fill, at the same place; app.js shows it and sets its opacity */
 .scenes { transition: opacity 1200ms ease-in-out; }
@@ -366,7 +365,7 @@ html.still .tile.focus .face, html.still .tile.focus .face::after { animation: n
   background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.22) 100%);
 }
 /* after 9 pm everything dims a little */
-.night .scene .sbg, .night .scene .fg, .night .scene .sbg2, .night .scene .fg2, .night .scene .gclock { filter: brightness(0.72); }
+.night .scene:not(.place) .sbg, .night .scene:not(.place) .fg, .night .scene:not(.place) .sbg2, .night .scene:not(.place) .fg2, .night .scene .gclock { filter: brightness(0.72); }
 .theme-night .scrim { background: linear-gradient(180deg, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.5) 100%); }
 
 /* 4 Night: the clock behind the peak, pink glass */
@@ -1994,4 +1993,4 @@ html.pic-night:not(.clock-liquid):not(.has-video) .s-fog .gclock .sheen { displa
 
 /* A bright sky behind the clock (html.date-dark, set by app.js placeTone): the glass is a deeper shade of the sky, not a pale one that is lost in it */
 html.date-dark:not(.clock-liquid):not(.has-video) .scene:not(.s-fog) .gclock .fill { filter: brightness(0.4) saturate(1.3); opacity: 1; }
-.scene .gclock .fill { transition: filter 3s linear, opacity 3s linear; }
+.scene.place .gclock .fill { transition: filter 3s linear, opacity 3s linear; }   /* a place's clock changes shade gradually */
