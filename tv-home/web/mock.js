@@ -233,8 +233,8 @@
   var sleepEnds = /[?&]sleep\b/.test(q) ? new Date(Date.now() + 42 * 60000).toISOString() : null;
   var picture = "calibrated";
   // pretend songs for ?music= (made up, with the scenes as covers)
-  var SONGS = [["Golden Hour Drive", "The Weekend Shifts", "scene-golden"], ["Low Tide", "Saltwater Radio", "scene-water"],
-               ["Fog Lights", "Northern Rivers Club", "scene-fog"]];
+  var SONGS = [["Golden Hour Drive", "The Weekend Shifts", "places/golden/clear-golden"], ["Low Tide", "Saltwater Radio", "places/water/clear-midday"],
+               ["Fog Lights", "Northern Rivers Club", "places/fog/clear-midday"]];
   var songAt = 0, songPlaying = arg("music") !== "paused";
   function mockSong() {
     var x = SONGS[songAt];

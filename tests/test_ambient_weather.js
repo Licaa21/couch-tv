@@ -98,6 +98,16 @@ AmbientWeather.setWeather({ code: 71, temp: -2 }, null);
 assert.strictEqual(AmbientWeather.getType(), "snow", "WMO 71 should map to snow");
 assert(lighting._classes.has("wx-snow-tint"), "Snow tint class should be set");
 
+// Heavy snow and heavy rain use the most particles: the pool must hold them (it once held fewer than heavy snow needs)
+AmbientWeather.setWeather({ code: 75, temp: -4 }, null);
+assert.strictEqual(AmbientWeather.getType(), "snow", "WMO 75 (heavy snow) maps to snow without throwing");
+AmbientWeather.setWeather({ code: 65, temp: 8 }, null);
+assert.strictEqual(AmbientWeather.getType(), "rain", "WMO 65 (heavy rain) maps to rain");
+AmbientWeather.setWeather({ code: 99, temp: 22 }, null);
+assert.strictEqual(AmbientWeather.getType(), "storm", "WMO 99 (hail storm) maps to storm");
+AmbientWeather.strike();   // only a storm takes it; no error
+AmbientWeather.setWeather({ code: 71, temp: -2 }, null);
+
 // Fog codes: 45, 48
 AmbientWeather.setWeather({ code: 45, temp: 10 }, null);
 assert.strictEqual(AmbientWeather.getType(), "fog", "WMO 45 should map to fog");

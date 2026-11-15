@@ -443,6 +443,7 @@
     SCENES = st.order.filter(function (id) { return st.off.indexOf(id) < 0; }).map(sceneById).filter(function (x) { return x && (SUN_SYNC || !x.weather); });
     if (!SCENES.length) SCENES = [SCENE_LIB[0]];
     SCENE_MS = Math.max(5, parseInt(ST.scene_seconds || HOME.scene_seconds, 10) || 20) * 1000;
+    readPlaceSettings();
     var people = CFG.people || [{ id: "person1", name: "Person 1" }, { id: "person2", name: "Person 2" }];
     // people added, renamed or removed in Home settings with no bridge to keep them
     var lst = kept("tvhome.people.list");
@@ -679,21 +680,14 @@
     // Your own scenes are not listed here: tools/make-scene.py makes them and home.my_scenes in
     // config.json names them (myScenes() below, docs/MAKE-A-SCENE.md).
     // Each scene's clock and date positions are in app.css (.s-<id>, .scene-<id> .date).
-    { id: "night", photo: "scene-night", fg: true, glass: true },
-    { id: "golden", photo: "scene-golden", fg: true, glass: true },
-    { id: "water", photo: "scene-water", fg: false, glass: true, water: 0.55 },   // the underside of the surface
-    { id: "fog", photo: "scene-fog", fg: true, glass: true },
-    { id: "dawn", photo: "scene-dawn", fg: true, glass: true },
-    // The weather scenes (the Samsung fork): the same places in other weather, edited from the scenes above, so each keeps its base
-    // scene's cut-out, clock and date place (look: the scene whose css it uses). They take turns only with "Follow the sun and
-    // the weather" on, which picks the one that fits the sky now (sunTargetScene).
-    { id: "mostlyclear", photo: "scene-mostlyclear", fg: true, glass: true, look: "golden", weather: true },
-    { id: "partly", photo: "scene-partly", fg: true, glass: true, look: "golden", weather: true },
-    { id: "storm", photo: "scene-storm", fg: true, glass: true, look: "golden", weather: true },
-    { id: "lakerain", photo: "scene-lakerain", fg: false, glass: true, water: 0.55, look: "water", weather: true },
-    { id: "junglerain", photo: "scene-junglerain", fg: true, glass: true, look: "dawn", weather: true },
-    { id: "snow", photo: "scene-snow", fg: true, glass: true, look: "fog", weather: true },
-    { id: "nightcloudy", photo: "scene-nightcloudy", fg: true, glass: true, look: "night", weather: true }
+    // The five places (Samsung fork): each has 30 pictures, backgrounds/places/<id>/<weather>-<time>.jpg (+ -glass.jpg, -fg.webp), five
+    // weathers by six times of day, picked from the sun and the sky (places.js, "places" below). The ids and the clock's css are the old
+    // five scenes': golden = the volcano, water = the lake, dawn = the rainforest, fog = the pines, night = the night lake.
+    { id: "golden", place: true, fg: true, glass: true },
+    { id: "water", place: true, fg: false, glass: true, water: 0.535 },   // the lake: the waterline
+    { id: "fog", place: true, fg: true, glass: true },
+    { id: "dawn", place: true, fg: true, glass: true },
+    { id: "night", place: true, fg: true, glass: true }
   ];
   var BUILT_IN = SCENE_LIB.slice();   // readConfig() adds your own scenes to SCENE_LIB
   var SCENES = SCENE_LIB.slice(), SCENE_MS = 20000, SUN_SYNC = false;
@@ -768,9 +762,9 @@
     sceneEls = SCENES.map(function (s) {
       var el = document.createElement("div");
       el.className = "scene s-" + sceneClass(s);
-      el.innerHTML = '<img class="sbg" alt="">' + (s.video ? '<video class="svid" muted loop playsinline preload="none"></video>' : "") +
+      el.innerHTML = '<img class="sbg" alt="">' + (s.place ? '<img class="sbg2" alt="">' : "") + (s.video ? '<video class="svid" muted loop playsinline preload="none"></video>' : "") +
         '<div class="shade"></div><div class="gclock"></div>' +
-        (s.water ? '<div class="gclock under"></div>' : "") + (s.fg ? '<img class="fg" alt="">' : "");
+        (s.water ? '<div class="gclock under"></div>' : "") + (s.fg ? '<img class="fg" alt="">' : "") + (s.place && s.fg ? '<img class="fg2" alt="">' : "");
       if (s.mine) {   // your own scene: its clock from config.json (app.css, "your own scenes")
         el.className += " x-" + s.x + (s.inter ? " f-inter" : "") + (s.dark ? " t-dark" : "");
         el.style.setProperty("--my-top", s.y * 100 + "vh");
@@ -806,8 +800,11 @@
   function readyScene(i) {
     var s = SCENES[i], el = sceneEls[i];
     if (!el.classList.contains("ready")) {
-      el.querySelector(".sbg").src = s.src || bgPath(s.photo, ".jpg", !s.mine);
-      if (s.fg) el.querySelector(".fg").src = bgPath(s.photo + "-fg", ".webp", !s.mine);
+      if (s.place) { s.L = null; placeUpdate(i, true); }
+      else {
+        el.querySelector(".sbg").src = s.src || bgPath(s.photo, ".jpg", !s.mine);
+        if (s.fg) el.querySelector(".fg").src = bgPath(s.photo + "-fg", ".webp", !s.mine);
+      }
       el.classList.add("ready");
       // decoded now, while the scene waits at opacity 0, rather than when its fade starts
       Array.prototype.forEach.call(el.querySelectorAll("img"), function (img) { if (img.decode && img.src) img.decode().catch(function () {}); });
@@ -817,8 +814,9 @@
 
   function drawClocks(el, s, hm) {
     if (!hm) return;
-    var cs = el.querySelectorAll(".gclock");
-    for (var k = 0; k < cs.length; k++) cs[k].innerHTML = '<span class="edge">' + hm + '</span><span class="fill">' + hm + '</span><span class="sheen">' + hm + '</span><span class="rim">' + hm + "</span>";
+    var cs = el.querySelectorAll(".gclock"), ph = s.place ? s.curA || "" : s.photo;
+    for (var k = 0; k < cs.length; k++) cs[k].innerHTML = '<span class="edge">' + hm + '</span><span class="fill">' + hm + "</span>" +
+      (s.place ? '<span class="fillb"><span class="fill">' + hm + "</span></span>" : "") + '<span class="sheen">' + hm + '</span><span class="rim">' + hm + "</span>";
     fitScene(el);   // raised first when the row would cover it, so the glass below is measured where the clock now is
     for (k = 0; k < cs.length; k++) {
       var c = cs[k];
@@ -829,14 +827,15 @@
         // 1 and 2 use the frosted copy instead, so the glass reads as frosted.
         var cx = c.offsetLeft + c.offsetWidth / 2, cy = c.offsetTop + c.offsetHeight / 2, LENS = 1.07;
         var frost = GLASS_AMT <= 2 && s.glass && !s.src;
-        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + s.photo + (frost ? "-glass" : "") + ".jpg)";
+        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + ph + (frost ? "-glass" : "") + ".jpg)";
         f.style.backgroundSize = LENS * 100 + "vw " + LENS * 100 + "vh";
         f.style.backgroundPosition = (-ex - (LENS - 1) * cx) + "px calc(" + (-ey - (LENS - 1) * cy) + "px + var(--cdy, 0px) * " + LENS + ")";
       } else {
-        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + s.photo + (s.glass ? "-glass" : "") + ".jpg)";
+        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + ph + (s.glass ? "-glass" : "") + ".jpg)";
         // --cdy: how far the Samsung app has lifted this clock (a transform): the photo in the digits stays the one behind them
         f.style.backgroundPosition = -ex + "px calc(" + -ey + "px + var(--cdy, 0px))";
       }
+      if (s.place) placeFillB(c, f, s);
     }
     if (s.water) {   // above the waterline sharp, below it the blurred reflection
       // The digits hang below the clock's box (its line height is tight), so the clips reach past
@@ -924,6 +923,7 @@
     var prev = scene;
     scene = i;
     readyScene(i);
+    if (SCENES[i].place && i !== prev) placeUpdate(i, true);   // a place drawn a while ago (as the next one) shows what the sky is now
     var date = $("date");
     date.classList.add("swap");
     setTimeout(function () {
@@ -1007,51 +1007,6 @@
     if (code >= 95) return "storm";
     return "";
   }
-  // The scene that fits the sky and the sun now (the weather scenes are used when they are on, else the five as before).
-  function sunTargetScene() {
-    var st = sceneState();
-    var available = st.order.filter(function (id) { return st.off.indexOf(id) < 0; });
-    // the first of the wanted scenes that is on (the list ends with what is always there)
-    var pick = function (wanted) {
-      for (var i = 0; i < wanted.length; i++) if (available.indexOf(wanted[i]) >= 0) return wanted[i];
-      return available[0] || "night";
-    };
-    var kind = weatherKind(data.weather && data.weather.code);
-
-    if (!WXCFG || WXCFG.lat == null || WXCFG.lon == null || !isFinite(WXCFG.lat) || !isFinite(WXCFG.lon)) {
-      var h = new Date().getHours();
-      if (h >= 5 && h < 8) return pick(["dawn", "golden", "water", "fog", "night"]);
-      if (h >= 8 && h < 16) return pick(["water", "fog", "golden", "dawn", "night"]);
-      if (h >= 16 && h < 19) return pick(["golden", "dawn", "water", "fog", "night"]);
-      return pick(["night", "fog", "water", "golden", "dawn"]);
-    }
-
-    var pos = solarAltitude(Number(WXCFG.lat), Number(WXCFG.lon), new Date());
-    // Night starts when the sun sets (-0.83 degrees: the weather's sunset time) if clouds hide the evening glow; a clear sky keeps its glow until -6
-    var night = pos.alt < (kind === "clear" || kind === "mostly" || !kind ? -6 : -0.83), wet = { storm: 1, snow: 1, rain: 1, drizzle: 1 }[kind];
-    if (night) {
-      if (kind === "mostly" || kind === "clear" || !kind) return pick(["night", "fog", "water", "golden", "dawn"]);
-      return pick(["nightcloudy", "night", "fog", "water", "golden", "dawn"]);
-    }
-    // weather that decides the picture whatever the hour of the day
-    if (kind === "storm") return pick(["storm", "fog", "water", "golden", "dawn", "night"]);
-    if (kind === "snow") return pick(["snow", "fog", "water", "golden", "dawn", "night"]);
-    if (kind === "rain") return pick(["lakerain", "junglerain", "fog", "water", "golden", "dawn", "night"]);
-    if (kind === "drizzle") return pick(["junglerain", "lakerain", "fog", "water", "golden", "dawn", "night"]);
-    if (pos.alt < 10 && !wet) {   // sunrise and sunset, when the sky allows it
-      if (kind === "cloudy" || kind === "fog") return pick(["fog", "water", "golden", "dawn", "night"]);
-      if (kind === "partly") return pick(["partly", "mostlyclear", "golden", "dawn", "water", "fog", "night"]);   // clouds are in the sky, so show the cloudy picture
-      return pos.hourAngle < 0
-        ? pick(["dawn", "golden", "water", "fog", "night"])
-        : pick(["golden", "dawn", "water", "fog", "night"]);
-    }
-    // the day
-    if (kind === "cloudy" || kind === "fog") return pick(["fog", "water", "golden", "dawn", "night"]);
-    if (kind === "partly") return pick(["partly", "mostlyclear", "water", "fog", "golden", "dawn", "night"]);
-    if (kind === "mostly") return pick(["mostlyclear", "water", "partly", "fog", "golden", "dawn", "night"]);
-    return pick(["water", "mostlyclear", "fog", "golden", "dawn", "night"]);
-  }
-
   // Whether a scene may change now. A change costs a weak TV a visible stall (430 ms on an LG
   // OLED55A2), so it should not land while someone is moving along the rows. lastKeyAt is
   // Date.now() at the last key press (0 before any). A false here is not lost: the 20 s rotation
@@ -1067,22 +1022,242 @@
     return true;
   }
 
-  function applySunSync() {
-    // the clock ticks before buildScenes() has made the scenes: wait for them (sun_sync on in config.json)
-    if (!NIGHT || !SUN_SYNC || !SCENES.length || sceneEls.length !== SCENES.length || !sceneMayChange()) return;
-    var targetId = sunTargetScene();
-    var idx = SCENES.map(function (s) { return s.id; }).indexOf(targetId);
-    if (idx >= 0 && idx !== scene) {
-      showScene(idx);
-    }
+  // ================= the places (Samsung fork): five places, 30 pictures each =================
+  // Which place is up comes from the clock alone (places.js pickIndex: every PLACE_EVERY seconds, in order or shuffled), so a restart changes
+  // nothing. Which of its 30 pictures shows comes from the sun and the sky: the time of day drifts continuously between two neighbouring
+  // pictures (the second one's opacity is how far the sun has gone), a change of weather dissolves in over WX_DISSOLVE seconds, and a change of
+  // place dips through black. A place's element holds two picture layers (.sbg and .sbg2, cut-outs .fg and .fg2, and the glass clock's
+  // .fill and .fillb); layer 2 shows over layer 1 at opacity L.pB. Rain, snow and lightning are not in the pictures: ambient-weather.js draws them.
+  var PLACE_EVERY = 3600, PLACE_RANDOM = false, PLACE_FX = "black", SMOOTH_TIME = true, WX_DISSOLVE = 30, FIXED_TIME = "golden", FIXED_WX = "clear";
+  var PLACE_EVERY_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 21600, 43200, 86400, 172800, 0];   // 0: never changes
+  var WX_DISSOLVE_STEPS = [15, 30, 60], PREVIEW_STEPS = [0, 60, 180, 600];
+  var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), PREVIEW = 0, previewFrom = null, previewTimer = null, lastTickAt = 0, changing = false;
+
+  function stepOf(list, v, d) { return list.indexOf(v) >= 0 ? v : d; }
+  function readPlaceSettings() {
+    PLACE_EVERY = stepOf(PLACE_EVERY_STEPS, parseInt(ST.place_every, 10), 3600);
+    PLACE_RANDOM = ST.place_random === true;
+    PLACE_FX = ST.place_fx === "dissolve" ? "dissolve" : "black";
+    SMOOTH_TIME = ST.smooth_time !== false;
+    WX_DISSOLVE = stepOf(WX_DISSOLVE_STEPS, parseInt(ST.wx_dissolve, 10), 30);
+    FIXED_TIME = window.Places.TIMES.indexOf(ST.fixed_time) >= 0 ? ST.fixed_time : "golden";
+    FIXED_WX = window.Places.WEATHERS.indexOf(ST.fixed_weather) >= 0 ? ST.fixed_weather : "clear";
   }
 
-  // the settings screen covers the scenes, so they wait (one less thing for a small TV stick to draw)
-  function nextScene() {
-    if (zone !== "settings" && sceneMayChange()) {
-      if (SUN_SYNC) applySunSync();
-      else showScene(nextFrom(scene));
+  // The sun's moment: now, or in a day preview the sped up day.
+  function sunDate() {
+    var n = Date.now();
+    return PREVIEW && previewFrom ? window.Places.previewDate(n, previewFrom.real, previewFrom.virt, PREVIEW) : new Date(n);
+  }
+  function currentPhase() {
+    var d = sunDate(), P = window.Places;
+    if (WXCFG && WXCFG.lat != null && WXCFG.lon != null && isFinite(WXCFG.lat) && isFinite(WXCFG.lon)) {
+      var lat = Number(WXCFG.lat), lon = Number(WXCFG.lon), pos = solarAltitude(lat, lon, d);
+      var day = Math.floor((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 0))) / 86400000);
+      return P.phaseFromSun(pos.alt, pos.hourAngle, P.maxAltitude(lat, day));
     }
+    return P.phaseFromHour(d.getHours() + d.getMinutes() / 60);   // no place set for the weather: the hour of the day
+  }
+  // What the sky asks for now: a picture set and a pair of times with the share of the second.
+  function placeTarget() {
+    var P = window.Places;
+    if (!SUN_SYNC) return { wx: FIXED_WX, pair: { a: P.TIMES.indexOf(FIXED_TIME), b: -1, p: 0 } };
+    return { wx: P.weatherSet(weatherKind(data.weather && data.weather.code)), pair: P.pairFor(currentPhase(), SMOOTH_TIME) };
+  }
+
+  function placeKey(s, sp) { return window.Places.file(s.id, sp.wx, window.Places.TIMES[sp.k]); }
+  function placeUrl(key, ext) { return "backgrounds/" + key + ext; }
+  function placeBlend(el, p, secs) {   // layer 2 at opacity p, getting there over secs seconds (0: at once)
+    var l = el.querySelectorAll(".sbg2, .fg2, .fillb");
+    for (var i = 0; i < l.length; i++) { l[i].style.transition = secs ? "opacity " + secs + "s linear" : "none"; l[i].style.opacity = p; }
+  }
+  // the glass clock's second fill: the picture over this one, at the same place behind the digits
+  function placeFillB(c, f, s) {
+    var fb = c.querySelector(".fillb"), f2 = fb && fb.querySelector(".fill");
+    if (!f2) return;
+    f2.style.backgroundImage = s.curB && s.curA ? f.style.backgroundImage.split(s.curA).join(s.curB) : "none";
+    f2.style.backgroundSize = f.style.backgroundSize;
+    f2.style.backgroundPosition = f.style.backgroundPosition;
+    fb.style.opacity = s.L ? s.L.pB : 0;
+  }
+  function placeImgs(s, el) {   // put the pictures of s.L into the layers (no fade)
+    var L = s.L, A = placeKey(s, L.A), B = L.B ? placeKey(s, L.B) : "", fg = el.querySelector(".fg"), fg2 = el.querySelector(".fg2");
+    el.querySelector(".sbg").src = placeUrl(A, ".jpg");
+    if (fg) fg.src = placeUrl(A, "-fg.webp");
+    var b2 = el.querySelector(".sbg2");
+    if (B) { b2.src = placeUrl(B, ".jpg"); if (fg2) fg2.src = placeUrl(B, "-fg.webp"); }
+    else { b2.removeAttribute("src"); if (fg2) fg2.removeAttribute("src"); }
+    s.curA = A; s.curB = B;
+    placeBlend(el, B ? L.pB : 0, 0);
+  }
+  function whenDecoded(imgs, done) {   // after the new pictures can be painted, so changing them shows no gap
+    var left = imgs.length, once = false, fin = function () { if (!once) { once = true; done(); } };
+    if (!left) return fin();
+    imgs.forEach(function (im) {
+      var ok = function () { if (--left <= 0) fin(); };
+      if (im.decode) im.decode().then(ok, ok); else ok();
+    });
+    setTimeout(fin, 800);
+  }
+  function placeRedraw(s, el) { if (glassShown) drawClocks(el, s, glassShown); }
+
+  // The layers hold the wanted pictures at once (the first draw, or the place has just been shown)
+  function placeUpdate(i, instant) {
+    var s = SCENES[i], el = sceneEls[i];
+    if (!s || !el || !s.place) return;
+    var T = placeTarget(), L = s.L;
+    if (!L || instant) {
+      s.L = { A: { wx: T.wx, k: T.pair.a }, B: T.pair.b >= 0 ? { wx: T.wx, k: T.pair.b } : null, pB: T.pair.p, busy: false, guess: !data.weather };   // guess: drawn before the weather was known
+      placeImgs(s, el);
+      return;
+    }
+    if (L.busy) return;
+    var tick = PREVIEW ? 1 : 15;
+    if (L.A.wx !== T.wx) return placeDissolve(s, el, { wx: T.wx, k: T.pair.a });                 // the weather changed
+    if (T.pair.b < 0) { if (L.A.k !== T.pair.a || L.B) placeDissolve(s, el, { wx: T.wx, k: T.pair.a }); return; }   // one picture wanted
+    if (L.B && L.A.k === T.pair.a && L.B.k === T.pair.b) { L.pB = T.pair.p; placeBlend(el, L.pB, tick * 1.2); return; }   // the day drifts on
+    if (L.B && L.B.k === T.pair.a && L.pB > 0.9) return placeCommit(s, el, L, function () { placeUpdate(i); });       // the day moved on a step
+    if (L.A.k === T.pair.a && !L.B) {                                                                               // the next picture comes in under the first
+      L.B = { wx: T.wx, k: T.pair.b }; L.pB = 0; L.busy = true;
+      var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2");
+      b2.src = placeUrl(placeKey(s, L.B), ".jpg"); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
+      s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
+      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; L.pB = T.pair.p; placeBlend(el, L.pB, tick * 1.2); });
+      return;
+    }
+    placeDissolve(s, el, { wx: T.wx, k: T.pair.a });   // anything else (back from a long wait, a new setting): dissolve to the wanted picture
+  }
+  // layer 2 becomes layer 1 (they show the same picture, so nothing changes on the screen)
+  function placeCommit(s, el, L, done) {
+    if (s.L !== L || !L.B) return done && done();
+    L.busy = true;
+    var A = placeKey(s, L.B), sb = el.querySelector(".sbg"), fg = el.querySelector(".fg");
+    sb.src = placeUrl(A, ".jpg"); if (fg) fg.src = placeUrl(A, "-fg.webp");
+    whenDecoded([sb].concat(fg ? [fg] : []), function () {
+      if (s.L !== L) return;
+      L.A = L.B; L.B = null; L.pB = 0; s.curA = A; s.curB = "";
+      placeBlend(el, 0, 0);
+      el.querySelector(".sbg2").removeAttribute("src"); var f2 = el.querySelector(".fg2"); if (f2) f2.removeAttribute("src");
+      placeRedraw(s, el);
+      L.busy = false;
+      if (done) done();
+    });
+  }
+  // The weather changed (or a setting did): first settle the drift on the nearest picture (8 s), then dissolve the new picture in over
+  // WX_DISSOLVE seconds, then go on drifting.
+  function placeDissolve(s, el, spec) {
+    var L = s.L, quick = L.guess && !!data.weather, secs = quick ? 3 : WX_DISSOLVE;   // the first weather after the start comes in quickly: it is a correction, not a change
+    L.guess = false;
+    L.busy = true;
+    var next = function () {
+      if (s.L !== L) return;
+      L.B = spec; L.pB = 1;
+      var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2"), key = placeKey(s, spec);
+      placeBlend(el, 0, 0);
+      b2.src = placeUrl(key, ".jpg"); if (fg2) fg2.src = placeUrl(key, "-fg.webp");
+      s.curB = key; placeRedraw(s, el);
+      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () {
+        if (s.L !== L) return;
+        placeBlend(el, 1, secs);
+        setTimeout(function () { if (s.L !== L) return; L.busy = false; placeCommit(s, el, L, function () { placeUpdate(sceneEls.indexOf(el)); }); }, secs * 1000 + 300);
+      });
+    };
+    if (L.B && L.pB > 0.02 && !quick) {   // fold the half way drift into one picture first
+      var to = L.pB >= 0.5 ? 1 : 0;
+      placeBlend(el, to, 8);
+      setTimeout(function () {
+        if (s.L !== L) return;
+        if (to) { L.busy = false; placeCommit(s, el, L, function () { L.busy = true; next(); }); }
+        else { L.B = null; L.pB = 0; s.curB = ""; placeBlend(el, 0, 0); next(); }
+      }, 8300);
+    } else next();
+  }
+
+  // Which scene is up now (nothing remembered: the clock decides), among those that are on and have their pictures.
+  function pickSceneIdx() {
+    var live = [];
+    SCENES.forEach(function (x, i) { if (!x.lost) live.push(i); });
+    return live.length ? live[window.Places.pickIndex(live.length, Date.now(), PLACE_EVERY, PLACE_RANDOM, PLACE_EPOCH)] : 0;
+  }
+  // Change to another scene: through black (the picture fades out, the new place is drawn while it is dark, and fades in), or dissolving.
+  function changeScene(want) {
+    if (changing || want === scene) return;
+    changing = true;
+    var box = $("scenes");
+    if (PLACE_FX === "black") {
+      box.classList.add("dip");
+      readyScene(want);   // drawn while the picture fades out
+      setTimeout(function () {
+        box.classList.add("cut");
+        showScene(want);
+        setTimeout(function () { box.classList.remove("cut"); box.classList.remove("dip"); changing = false; }, 120);
+      }, 1300);
+    } else {
+      box.classList.add("slow");
+      showScene(want);
+      setTimeout(function () { box.classList.remove("slow"); changing = false; }, 4300);
+    }
+  }
+  // Every 15 s (and when the clock changes, the weather arrives or a setting does): the place by the clock, the picture by the sun.
+  function sceneTick(force) {
+    var now = Date.now();
+    if (!NIGHT || !SCENES.length || sceneEls.length !== SCENES.length || zone === "settings" || changing) return;
+    if (!force && now - lastTickAt < 4000) return;
+    if (!sceneMayChange()) return;
+    lastTickAt = now;
+    var want = pickSceneIdx();
+    if (want !== scene) changeScene(want);
+    else placeUpdate(scene);
+  }
+  function applySunSync() { sceneTick(true); }
+  function nextScene() { sceneTick(); }
+  function setPreview(secs) {
+    PREVIEW = secs;
+    clearInterval(previewTimer);
+    previewFrom = null;
+    if (secs) { previewFrom = { real: Date.now(), virt: Date.now() }; previewTimer = setInterval(function () { sceneTick(true); }, 1000); }
+    sceneTick(true);
+  }
+
+  // Home settings, Scenes: the rows for the places
+  function durText(sec) {
+    if (!sec) return t("place_never");
+    if (sec < 3600) return t("dur_min", { n: sec / 60 });
+    if (sec < 86400) return t("dur_hour", { n: sec / 3600 });
+    return t("dur_day", { n: sec / 86400 });
+  }
+  function cycleOf(list, v) { return list[(list.indexOf(v) + 1) % list.length]; }
+  function placeRows(rows) {
+    var P = window.Places;
+    rows.push({ kind: "cycle", key: "place-every", label: t("place_every"), sub: t("place_every_sub"), value: durText(PLACE_EVERY), act: function () {
+      PLACE_EVERY = cycleOf(PLACE_EVERY_STEPS, PLACE_EVERY); ST.place_every = PLACE_EVERY; saveSettings();
+    } });
+    rows.push({ kind: "cycle", key: "place-order", label: t("place_order"), value: PLACE_RANDOM ? t("place_random") : t("place_in_order"), act: function () {
+      PLACE_RANDOM = !PLACE_RANDOM; ST.place_random = PLACE_RANDOM; saveSettings();
+    } });
+    rows.push({ kind: "cycle", key: "place-fx", label: t("place_fx"), sub: t("place_fx_sub"), value: PLACE_FX === "black" ? t("place_fx_black") : t("place_fx_dissolve"), act: function () {
+      PLACE_FX = PLACE_FX === "black" ? "dissolve" : "black"; ST.place_fx = PLACE_FX; saveSettings();
+    } });
+    rows.push({ kind: "toggle", key: "sun-sync", label: t("sun_sync"), sub: t("sun_sync_sub"), value: SUN_SYNC ? t("on") : t("off"), act: function () {
+      SUN_SYNC = !SUN_SYNC; ST.sun_sync = SUN_SYNC; saveSettings(); sceneTick(true); renderSettings();   // the rows for a fixed picture come and go
+    } });
+    if (!SUN_SYNC) {   // a picture that stays what it is: the time of day and the weather to show
+      rows.push({ kind: "cycle", key: "fixed-time", label: t("fixed_time"), value: t("tod_" + FIXED_TIME), act: function () {
+        FIXED_TIME = cycleOf(P.TIMES, FIXED_TIME); ST.fixed_time = FIXED_TIME; saveSettings(); sceneTick(true);
+      } });
+      rows.push({ kind: "cycle", key: "fixed-wx", label: t("fixed_weather"), value: t("wxs_" + FIXED_WX), act: function () {
+        FIXED_WX = cycleOf(P.WEATHERS, FIXED_WX); ST.fixed_weather = FIXED_WX; saveSettings(); sceneTick(true);
+      } });
+    }
+    rows.push({ kind: "toggle", key: "smooth-time", label: t("smooth_time"), sub: t("smooth_time_sub"), value: SMOOTH_TIME ? t("on") : t("off"), act: function () {
+      SMOOTH_TIME = !SMOOTH_TIME; ST.smooth_time = SMOOTH_TIME; saveSettings(); sceneTick(true);
+    } });
+    rows.push({ kind: "cycle", key: "wx-dissolve", label: t("wx_dissolve"), sub: t("wx_dissolve_sub"), value: t("n_secs", { n: WX_DISSOLVE }), act: function () {
+      WX_DISSOLVE = cycleOf(WX_DISSOLVE_STEPS, WX_DISSOLVE); ST.wx_dissolve = WX_DISSOLVE; saveSettings();
+    } });
+    rows.push({ kind: "cycle", key: "day-preview", label: t("day_preview"), sub: t("day_preview_sub"), value: PREVIEW ? t("day_preview_n", { n: PREVIEW / 60 }) : t("off"), act: function () {
+      setPreview(cycleOf(PREVIEW_STEPS, PREVIEW));   // not saved: off again after a restart
+    } });
   }
 
   function getSunPos() {
@@ -1100,7 +1275,7 @@
   function ambientSync() {
     var a = window.AmbientWeather;
     if (!a) return;
-    a.setLighter(LIGHTER || OLD_ENGINE);
+    a.setLighter(window.MoonfinTV ? false : (LIGHTER || OLD_ENGINE));   // the Samsung build keeps rain, snow and storms under Lighter home: they are a few dozen strokes a frame
     a.setEnabled(WX_AMBIENT && WX_SHOW);
     a.setSunGradeEnabled(WX_SUN_GRADE && !LIGHTER && !OLD_ENGINE);
     updateAmbientWeather();
@@ -3799,17 +3974,10 @@
       if (!sc) return;
       var label = sc.own ? t("scene_photo", { n: sc.n }) : sc.mine ? sc.name || t("scene_mine", { n: sc.n }) : t("scene_" + id);
       rows.push({ kind: "check", key: "scene:" + id, label: label,
-        thumb: sc.own ? sc.src : "backgrounds/" + sc.photo + ".jpg", checked: st.off.indexOf(id) < 0,
+        thumb: sc.own ? sc.src : sc.place ? "backgrounds/places/" + sc.id + "/thumb.jpg" : "backgrounds/" + sc.photo + ".jpg", checked: st.off.indexOf(id) < 0,
         act: function () { toggleScene(id); }, move: function (d) { moveScene(id, d); } });
     });
-    rows.push({ kind: "toggle", key: "sun-sync", label: t("sun_sync"), sub: t("sun_sync_sub"), value: SUN_SYNC ? t("on") : t("off"), act: function () {
-      SUN_SYNC = !SUN_SYNC; ST.sun_sync = SUN_SYNC; saveSettings(); if (SUN_SYNC) applySunSync();
-    } });
-    var secs = Math.round(SCENE_MS / 1000);
-    rows.push({ kind: "cycle", key: "scene-secs", label: t("scene_secs"), value: t("n_secs", { n: secs }), act: function () {
-      var i = SECS_STEPS.indexOf(secs), n = i < 0 ? 20 : SECS_STEPS[(i + 1) % SECS_STEPS.length];
-      ST.scene_seconds = n; SCENE_MS = n * 1000; saveSettings();
-    } });
+    placeRows(rows);
     rows.push({ kind: "cycle", key: "clock", label: t("clock"), value: CLOCK24 ? t("clock_24") : t("clock_12"), act: function () {
       CLOCK24 = !CLOCK24; ST.clock = CLOCK24 ? "24h" : "12h"; saveSettings(); glassShown = ""; clock();
     } });
@@ -5168,6 +5336,13 @@
       document.documentElement.classList.toggle("kw-off", !on);
       reloadShelf();
     },   // connecting Jellyfin turns the row on
+    // what the places are doing now, and the day preview (the same as Home settings, Scenes): for tests and for trying it from a browser
+    places: function () {
+      var sc = SCENES[scene] || {}, L = sc.L;
+      return { scene: sc.id, place: !!sc.place, A: L && L.A ? placeKey(sc, L.A) : "", B: L && L.B ? placeKey(sc, L.B) : "", pB: L ? L.pB : 0, busy: !!(L && L.busy), dip: $("scenes").classList.contains("dip") };
+    },
+    preview: function (secs) { setPreview(secs); },
+    tick: function () { sceneTick(true); },
     weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: WXCFG.place, timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },
     screenOff: function () { toggleScreenOff(true); },
     wakeScreen: function () { toggleScreenOff(false); },
@@ -5228,9 +5403,9 @@
       // ?scene=fog starts on that scene, for previews (?scene=own: the first of the household's
       // photos; ?scene=<id>: one of your own scenes)
       var first = (Q.match(/[?&]scene=([a-z0-9]+)/) || [])[1];
-      if (!first && SUN_SYNC) first = sunTargetScene();
-      showScene(Math.max(0, SCENES.map(function (s) { return s.own ? "own" : s.id; }).indexOf(first)));
-      if (SCENES.length > 1) setInterval(nextScene, SCENE_MS);
+      var firstIdx = SCENES.map(function (s) { return s.own ? "own" : s.id; }).indexOf(first);
+      showScene(firstIdx >= 0 ? firstIdx : pickSceneIdx());
+      setInterval(sceneTick, 15000);   // the sun moves the picture, the clock changes the place
       // the clock font must be in before the glass is measured
       if (document.fonts) document.fonts.load("300 10px Antonio").then(function () { glassShown = ""; clock(); });
       refreshWeather();

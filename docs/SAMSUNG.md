@@ -287,3 +287,19 @@ remote. A Frame in Art Mode is still on the network, so "on" from the phone alwa
    delete "Couch TV bridge".
 
 Nothing else on the TV was changed.
+
+## Places: five photo places that follow the sun and the weather (this fork)
+
+The home's picture is one of five **places** (volcano, alpine lake, pine fog, rainforest hills, night lake). Each place has 30 pictures:
+five skies (clear, partly cloudy, cloudy, storm clouds, snow) by six times of day (night, sunrise, morning, midday, golden hour, sunset).
+Rain, snow and lightning are not in the pictures: they are drawn over them (Home settings, Weather, "weather effects").
+
+- **Which place:** Home settings, Look and scenes. Tick the places that take part and put them in order. "Change place every" runs from
+  1 minute to 2 days (or never); the place is worked out from the clock, so a restart or a power cut changes nothing. "Place order": in order
+  or shuffled. "Place change effect": fade through black (default) or dissolve.
+- **Which picture:** with "Follow the sun and the weather" on, the sun (from the weather place's latitude and longitude) and the sky decide.
+  The time of day drifts continuously between two neighbouring pictures, so you never see it switch ("Smooth time of day"); a change of weather
+  dissolves in over 15, 30 or 60 seconds. With it off you pick one time of day and one sky, and the picture stays.
+- **Day preview:** runs a whole day in 1, 3 or 10 minutes to see the changes. It is not saved: off again after a restart.
+- **Making the pictures:** `samsung/tools/gemini-places.py` has the prompts (Gemini, from the 4K originals), `samsung/tools/make-place-scenes.py` turns
+  them into the app's files (`tv-home/web/backgrounds/places/<id>/`, about 14 MB a place). No personal data is in them.

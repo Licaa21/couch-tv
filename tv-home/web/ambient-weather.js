@@ -18,17 +18,21 @@
   var currentType = "clear"; // "rain", "snow", "fog", "storm", "clear"
   var particles = [];
   var fogNodes = [];
-  var MAX_RAIN = 65;
-  var MAX_SNOW = 40;
+  var MAX_RAIN = 240;   // the pool; how many are drawn depends on how hard it rains (rainN)
+  var MAX_SNOW = 320;
+  var rainN = 110, snowN = 160;
   var MAX_FOG = 4;
 
   var W = 1920;
   var H = 1080;
   var lastTime = 0;
 
-  // Thunderstorm lightning state
-  var flashAlpha = 0;
+  // Thunderstorm lightning state: a forked bolt that flickers and lights the sky around it
   var nextFlashTime = 0;
+  var boltAt = 0;            // when the bolt struck (0 = none showing)
+  var boltMain = [];         // the main bolt, [x, y] pairs from the top
+  var boltForks = [];        // the forks: each a list of [x, y]
+  var boltX = 0;             // where the sky lights up from
 
   // WMO weather code categorization (Open-Meteo standard)
   var RAIN_CODES = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82];
@@ -49,7 +53,7 @@
   function initParticlePool() {
     particles = [];
     var i;
-    for (i = 0; i < MAX_RAIN; i++) {
+    for (i = 0; i < Math.max(MAX_RAIN, MAX_SNOW); i++) {   // rain and snow share the pool: it holds the bigger of the two
       particles.push({
         x: Math.random() * (W + 200) - 100,
         y: Math.random() * H,
@@ -57,6 +61,7 @@
         speed: randomRange(22, 34),
         alpha: randomRange(0.12, 0.32),
         width: randomRange(1.2, 1.8),
+        d: 1,
         splash: 0,
         splashMax: randomRange(6, 14),
         splashX: 0,
@@ -76,25 +81,32 @@
     }
   }
 
+  // Depth: 0 far (small, slow, faint), 1 middle, 2 near (big, fast, bright). Drawn in three batches, so a hard rain costs
+  // three strokes a frame, not one per drop.
   function resetSnowParticle(p, startAnywhere) {
+    var r = Math.random();
+    p.d = r < 0.45 ? 0 : r < 0.85 ? 1 : 2;
     p.x = Math.random() * (W + 100) - 50;
     p.y = startAnywhere ? Math.random() * H : -10;
-    p.radius = randomRange(1.8, 3.8);
-    p.speedY = randomRange(1.2, 2.8);
+    p.radius = p.d === 0 ? randomRange(1.3, 2.2) : p.d === 1 ? randomRange(2.3, 3.5) : randomRange(3.2, 5.0);
+    p.speedY = p.d === 0 ? randomRange(0.8, 1.5) : p.d === 1 ? randomRange(1.5, 2.6) : randomRange(2.8, 4.2);
     p.speedX = randomRange(-0.4, 0.4);
     p.wobble = Math.random() * Math.PI * 2;
     p.wobbleSpeed = randomRange(0.015, 0.035);
-    p.alpha = randomRange(0.25, 0.65);
+    p.alpha = 1;
   }
 
   function resetRainParticle(p, startAnywhere) {
+    var r = Math.random();
+    p.d = r < 0.4 ? 0 : r < 0.8 ? 1 : 2;
+    p.len = p.d === 0 ? randomRange(16, 28) : p.d === 1 ? randomRange(30, 50) : randomRange(54, 84);
+    p.speed = p.d === 0 ? randomRange(14, 20) : p.d === 1 ? randomRange(24, 34) : randomRange(38, 50);
     p.x = Math.random() * (W + 300) - 150;
     p.y = startAnywhere ? Math.random() * H : -p.len;
-    p.len = randomRange(28, 52);
-    p.speed = randomRange(24, 36);
-    p.alpha = randomRange(0.12, 0.32);
-    p.width = randomRange(1.2, 1.8);
+    p.alpha = 1;
+    p.width = 1;
     p.splash = 0;
+    p.splashMax = randomRange(6, 14);
   }
 
   // Draws (or clears) the current weather: called when the weather, or a setting that gates it, changes.
@@ -105,7 +117,7 @@
     if (!canvas || !ctx || currentType === "clear" || !enabled || lighterMode) return;
 
     // Re-initialize particles for the type
-    var count = currentType === "snow" ? MAX_SNOW : MAX_RAIN;
+    var count = currentType === "snow" ? snowN : rainN;
     for (var i = 0; i < count; i++) {
       if (currentType === "snow") resetSnowParticle(particles[i], true);
       else resetRainParticle(particles[i], true);
@@ -114,8 +126,8 @@
     if (lightingEl) lightingEl.classList.add("has-weather-tint", "wx-" + currentType + "-tint");
 
     if (currentType === "storm") {
-      nextFlashTime = Date.now() + randomRange(8000, 18000);
-      flashAlpha = 0;
+      nextFlashTime = Date.now() + randomRange(3000, 8000);
+      boltAt = 0;
     }
 
     startLoop();
@@ -142,6 +154,69 @@
     }
   }
 
+  // Lightning. The bolt is grown by random midpoint displacement (each segment is split and its middle pushed sideways,
+  // again and again), so it is jagged like the real thing; forks leave it at a few points and are grown the same way.
+  // Built once per strike, so nothing is allocated per frame.
+  function grow(x1, y1, x2, y2, off, out) {
+    if (off < 5) { out.push([x2, y2]); return; }
+    var mx = (x1 + x2) / 2 + randomRange(-off, off), my = (y1 + y2) / 2 + randomRange(-off * 0.25, off * 0.25);
+    grow(x1, y1, mx, my, off / 2, out);
+    grow(mx, my, x2, y2, off / 2, out);
+  }
+  function buildBolt() {
+    var x0 = randomRange(W * 0.15, W * 0.85), x1 = x0 + randomRange(-160, 160), y1 = randomRange(H * 0.5, H * 0.72), i;
+    boltMain = [[x0, -10]];
+    grow(x0, -10, x1, y1, 110, boltMain);
+    boltForks = [];
+    var forks = 2 + Math.floor(Math.random() * 3);
+    for (i = 0; i < forks; i++) {
+      var at = boltMain[4 + Math.floor(Math.random() * (boltMain.length - 10))], dir = Math.random() < 0.5 ? -1 : 1, f = [[at[0], at[1]]];
+      grow(at[0], at[1], at[0] + dir * randomRange(90, 260), at[1] + randomRange(140, 300), 56, f);
+      boltForks.push(f);
+    }
+    boltX = x0;
+  }
+  function pathOf(list) {
+    for (var j = 0; j < list.length; j++) {
+      var pts = list[j];
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    }
+  }
+  // How bright the strike is t ms after it began: a hard flash, a flicker, a second flash, then it dies away.
+  function boltLevel(t) {
+    if (t < 70) return 1;
+    if (t < 130) return 0.25;
+    if (t < 230) return 0.85;
+    if (t < 600) return 0.85 * (1 - (t - 230) / 370);
+    return 0;
+  }
+  function drawLightning(now) {
+    if (!boltAt && now >= nextFlashTime) {
+      buildBolt();
+      boltAt = now;
+      nextFlashTime = now + randomRange(7000, 20000);
+    }
+    if (!boltAt) return;
+    var lv = boltLevel(now - boltAt);
+    if (lv <= 0) { boltAt = 0; return; }
+    // the sky lights up round the strike, brighter near the bolt and fading to the corners: never a blinding white screen
+    var g = ctx.createRadialGradient(boltX, H * 0.25, 20, boltX, H * 0.25, W * 0.75);
+    g.addColorStop(0, "rgba(205, 222, 255, " + (0.42 * lv).toFixed(3) + ")");
+    g.addColorStop(1, "rgba(205, 222, 255, " + (0.1 * lv).toFixed(3) + ")");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    var passes = [[18, 0.10, "150, 180, 255"], [8, 0.24, "175, 200, 255"], [3, 0.97, "248, 250, 255"]], i;
+    for (i = 0; i < 3; i++) {   // glow, halo, core
+      ctx.beginPath(); pathOf([boltMain]);
+      ctx.lineWidth = passes[i][0]; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * lv).toFixed(3) + ")"; ctx.stroke();
+      ctx.beginPath(); pathOf(boltForks);
+      ctx.lineWidth = passes[i][0] * 0.5; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * 0.8 * lv).toFixed(3) + ")"; ctx.stroke();
+    }
+  }
+
   function renderLoop() {
     if (!running) return;
 
@@ -161,69 +236,57 @@
     var windAngle = 0.16; // gentle diagonal tilt ~9 degrees
 
     if (currentType === "rain" || currentType === "storm") {
-      var rainCount = MAX_RAIN;
-      ctx.lineWidth = 1.4;
-
-      for (var r = 0; r < rainCount; r++) {
-        var rp = particles[r];
-        if (rp.splash > 0) {
-          // Render dying splash ring near bottom
-          rp.splash += dt * 30;
-          ctx.beginPath();
-          ctx.ellipse(rp.splashX, rp.splashY, rp.splash * 1.5, rp.splash * 0.6, 0, 0, Math.PI * 2);
-          ctx.strokeStyle = "rgba(220, 235, 255, " + (Math.max(0, (1 - rp.splash / rp.splashMax) * rp.alpha * 0.7)).toFixed(3) + ")";
-          ctx.stroke();
-          if (rp.splash >= rp.splashMax) {
-            resetRainParticle(rp, false);
-          }
-        } else {
+      var RAIN_ALPHA = [0.16, 0.26, 0.40], RAIN_W = [1, 1.4, 2.1], d, rp;
+      for (d = 0; d < 3; d++) {   // one path and one stroke for every depth
+        ctx.beginPath();
+        for (var r = 0; r < rainN; r++) {
+          rp = particles[r];
+          if (rp.d !== d || rp.splash > 0) continue;
           rp.y += rp.speed * k;
           rp.x += rp.speed * k * windAngle;
-
-          var bottomBound = H - randomRange(10, 80);
-          if (rp.y >= bottomBound) {
-            rp.splash = 1;
+          if (rp.y >= H - randomRange(10, 80)) {
+            rp.splash = d === 0 ? 0 : 1;   // far drops just end, the others splash
             rp.splashX = rp.x;
             rp.splashY = rp.y;
-          } else {
-            ctx.beginPath();
-            ctx.moveTo(rp.x, rp.y);
-            ctx.lineTo(rp.x - rp.len * windAngle, rp.y - rp.len);
-            ctx.strokeStyle = "rgba(205, 225, 255, " + rp.alpha.toFixed(3) + ")";
-            ctx.lineWidth = rp.width;
-            ctx.stroke();
+            if (!rp.splash) resetRainParticle(rp, false);
+            continue;
           }
+          ctx.moveTo(rp.x, rp.y);
+          ctx.lineTo(rp.x - rp.len * windAngle, rp.y - rp.len);
         }
+        ctx.strokeStyle = "rgba(205, 225, 255, " + RAIN_ALPHA[d] + ")";
+        ctx.lineWidth = RAIN_W[d];
+        ctx.stroke();
       }
+      ctx.beginPath();   // the dying splash rings, in one batch
+      for (var q = 0; q < rainN; q++) {
+        rp = particles[q];
+        if (rp.splash <= 0) continue;
+        rp.splash += dt * 30;
+        ctx.moveTo(rp.splashX + rp.splash * 1.5, rp.splashY);
+        ctx.ellipse(rp.splashX, rp.splashY, rp.splash * 1.5, rp.splash * 0.6, 0, 0, Math.PI * 2);
+        if (rp.splash >= rp.splashMax) resetRainParticle(rp, false);
+      }
+      ctx.strokeStyle = "rgba(220, 235, 255, 0.16)";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
 
-      // Lightning flare in thunderstorms
-      if (currentType === "storm") {
-        if (now >= nextFlashTime && flashAlpha <= 0) {
-          flashAlpha = randomRange(0.20, 0.35); // subtle ambient wash, never blinding white
-          nextFlashTime = now + randomRange(14000, 32000);
-        }
-        if (flashAlpha > 0) {
-          flashAlpha -= dt * 1.4;
-          if (flashAlpha < 0) flashAlpha = 0;
-          ctx.fillStyle = "rgba(225, 235, 255, " + flashAlpha.toFixed(3) + ")";
-          ctx.fillRect(0, 0, W, H);
-        }
-      }
+      if (currentType === "storm") drawLightning(now);
     } else if (currentType === "snow") {
-      var snowCount = MAX_SNOW;
-      for (var s = 0; s < snowCount; s++) {
-        var sp = particles[s];
-        sp.wobble += sp.wobbleSpeed * k;
-        sp.y += sp.speedY * k;
-        sp.x += (Math.sin(sp.wobble) * 0.75 + sp.speedX) * k;
-
-        if (sp.y > H + 10 || sp.x < -20 || sp.x > W + 20) {
-          resetSnowParticle(sp, false);
-        }
-
+      var SNOW_ALPHA = [0.6, 0.8, 0.95], sp, sd;
+      for (sd = 0; sd < 3; sd++) {
         ctx.beginPath();
-        ctx.arc(sp.x, sp.y, sp.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(245, 250, 255, " + sp.alpha.toFixed(3) + ")";
+        for (var s = 0; s < snowN; s++) {
+          sp = particles[s];
+          if (sp.d !== sd) continue;
+          sp.wobble += sp.wobbleSpeed * k;
+          sp.y += sp.speedY * k;
+          sp.x += (Math.sin(sp.wobble) * (0.5 + 0.25 * sd) + sp.speedX) * k;
+          if (sp.y > H + 10 || sp.x < -20 || sp.x > W + 20) resetSnowParticle(sp, false);
+          ctx.moveTo(sp.x + sp.radius, sp.y);
+          ctx.arc(sp.x, sp.y, sp.radius, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = "rgba(246, 250, 255, " + SNOW_ALPHA[sd] + ")";
         ctx.fill();
       }
     } else if (currentType === "fog") {
@@ -324,6 +387,14 @@
         return;
       }
 
+      // how hard: drizzle and light rain are few drops, heavy rain and storms many; snow the same
+      var rn = { 51: 60, 53: 80, 55: 110, 56: 70, 57: 110, 61: 100, 63: 160, 65: 230, 66: 120, 67: 230, 80: 110, 81: 170, 82: 240, 95: 180, 96: 230, 99: 240 }[code];
+      var sn = { 71: 90, 73: 170, 75: 280, 77: 90, 85: 140, 86: 280 }[code];
+      var same = (rn && currentType === (code >= 95 ? "storm" : "rain")) || (sn && currentType === "snow");
+      var changed = (rn && rn !== rainN) || (sn && sn !== snowN);
+      if (rn) rainN = rn;
+      if (sn) snowN = sn;
+      if (changed && same) applyType();   // the same weather, harder or softer
       if (STORM_CODES.indexOf(code) >= 0) {
         setWeatherType("storm");
       } else if (RAIN_CODES.indexOf(code) >= 0) {
@@ -377,6 +448,11 @@
 
     getType: function () {
       return currentType;
+    },
+
+    // a strike right now (a preview, and for tests); only in a storm
+    strike: function () {
+      if (currentType === "storm") { nextFlashTime = 0; boltAt = 0; }
     }
   };
 
