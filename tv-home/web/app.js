@@ -819,7 +819,7 @@
     if (!hm) return;
     var cs = el.querySelectorAll(".gclock"), ph = s.place ? s.curA || "" : s.photo;
     for (var k = 0; k < cs.length; k++) cs[k].innerHTML = '<span class="edge">' + hm + '</span><span class="fill">' + hm + "</span>" +
-      (s.place ? '<span class="fillb"><span class="fill">' + hm + "</span></span>" : "") + '<span class="sheen">' + hm + '</span><span class="rim">' + hm + "</span>";
+      (s.place ? '<span class="fill fillb">' + hm + "</span>" : "") + '<span class="sheen">' + hm + '</span><span class="rim">' + hm + "</span>";
     fitScene(el);   // raised first when the row would cover it, so the glass below is measured where the clock now is
     for (k = 0; k < cs.length; k++) {
       var c = cs[k];
@@ -949,8 +949,9 @@
     sceneBooted = true;
     setTimeout(function () {
       var next = nextFrom(scene);
-      sceneEls.forEach(function (el, k) { if (k !== scene && k !== next) el.classList.remove("ready"); });
-      readyScene(next);
+      // a place has up to four full-screen pictures: only the one showing is kept (the next place is drawn while the screen is black)
+      sceneEls.forEach(function (el, k) { if (k !== scene && (k !== next || SCENES[k].place)) el.classList.remove("ready"); });
+      if (!SCENES[next].place) readyScene(next);
       sceneVideos(true);   // the old scene's clip stops now it has faded out; this one's starts
     }, readyAfter);
   }
@@ -1072,16 +1073,24 @@
   function placeUrl(key, ext) { return "backgrounds/" + key + ext; }
   function placeBlend(el, p, secs) {   // layer 2 at opacity p, getting there over secs seconds (0: at once)
     var l = el.querySelectorAll(".sbg2, .fg2, .fillb");
-    for (var i = 0; i < l.length; i++) { l[i].style.transition = secs ? "opacity " + secs + "s linear" : "none"; l[i].style.opacity = p; }
+    // not drawn at all while it shows nothing: on a slow TV every full-screen layer costs while the clock moves or the rows scroll
+    for (var i = 0; i < l.length; i++) {
+      if (p > 0.001) l[i].style.display = "block";
+      l[i].style.transition = secs ? "opacity " + secs + "s linear" : "none";
+      l[i].style.opacity = p;
+      if (p <= 0.001 && !secs) l[i].style.display = "none";
+    }
   }
   // the glass clock's second fill: the picture over this one, at the same place behind the digits
   function placeFillB(c, f, s) {
-    var fb = c.querySelector(".fillb"), f2 = fb && fb.querySelector(".fill");
+    var fb = c.querySelector(".fill.fillb"), f2 = fb;   // the second fill is a fill of its own with its own opacity (no wrapper: a wrapper's opacity over a clipped-text fill is not drawn right on every TV)
     if (!f2) return;
     f2.style.backgroundImage = s.curB && s.curA ? f.style.backgroundImage.split(s.curA).join(s.curB) : "none";
     f2.style.backgroundSize = f.style.backgroundSize;
     f2.style.backgroundPosition = f.style.backgroundPosition;
-    fb.style.opacity = s.L ? s.L.pB : 0;
+    var pb = s.L && s.curB ? s.L.pB : 0;
+    fb.style.opacity = pb;
+    fb.style.display = pb > 0.001 ? "block" : "none";   // not drawn while it shows nothing
   }
   function placeImgs(s, el) {   // put the pictures of s.L into the layers (no fade)
     var L = s.L, A = placeKey(s, L.A), B = L.B ? placeKey(s, L.B) : "", fg = el.querySelector(".fg"), fg2 = el.querySelector(".fg2");
@@ -1115,17 +1124,19 @@
       return;
     }
     if (L.busy) return;
-    var tick = PREVIEW ? 1 : 15;
     if (L.A.wx !== T.wx) return placeDissolve(s, el, { wx: T.wx, k: T.pair.a });                 // the weather changed
     if (T.pair.b < 0) { if (L.A.k !== T.pair.a || L.B) placeDissolve(s, el, { wx: T.wx, k: T.pair.a }); return; }   // one picture wanted
-    if (L.B && L.A.k === T.pair.a && L.B.k === T.pair.b) { L.pB = T.pair.p; placeBlend(el, L.pB, tick * 1.2); return; }   // the day drifts on
+    if (L.B && L.A.k === T.pair.a && L.B.k === T.pair.b) {   // the day drifts on: a step of 3 percent or more, then still (a layer that is always fading costs every frame)
+      if (Math.abs(T.pair.p - L.pB) >= (PREVIEW ? 0.004 : 0.03)) { L.pB = T.pair.p; placeBlend(el, L.pB, PREVIEW ? 1.2 : 4); }
+      return;
+    }
     if (L.B && L.B.k === T.pair.a && L.pB > 0.9) return placeCommit(s, el, L, function () { placeUpdate(i); });       // the day moved on a step
     if (L.A.k === T.pair.a && !L.B) {                                                                               // the next picture comes in under the first
       L.B = { wx: T.wx, k: T.pair.b }; L.pB = 0; L.busy = true;
       var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2");
       b2.src = placeUrl(placeKey(s, L.B), ".jpg"); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
       s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
-      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; L.pB = T.pair.p; placeBlend(el, L.pB, tick * 1.2); });
+      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; L.pB = T.pair.p; placeBlend(el, L.pB, PREVIEW ? 1.2 : 4); });
       return;
     }
     placeDissolve(s, el, { wx: T.wx, k: T.pair.a });   // anything else (back from a long wait, a new setting): dissolve to the wanted picture
@@ -1197,8 +1208,11 @@
       }, 1300);
     } else {
       box.classList.add("slow");
-      showScene(want);
-      setTimeout(function () { box.classList.remove("slow"); changing = false; }, 4300);
+      readyScene(want);   // drawn first, so the dissolve has a picture to fade to
+      setTimeout(function () {
+        showScene(want);
+        setTimeout(function () { box.classList.remove("slow"); changing = false; }, 4300);
+      }, 800);
     }
   }
   // Every 15 s (and when the clock changes, the weather arrives or a setting does): the place by the clock, the picture by the sun.
@@ -5214,6 +5228,7 @@
 
   document.addEventListener("keydown", function (e) {
     lastKeyAt = Date.now();
+    if (window.AmbientWeather) window.AmbientWeather.hush(2500);   // rain and snow stand still while the rows move: a weak TV needs the frames for them
     resetSmartIdle();
     // Holding an arrow in Home settings sends a key about thirty times a second and each one redraws the
     // list, so on a slow TV they piled up and the focus ran off the screen. Repeats are spaced out, and the

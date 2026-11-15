@@ -20,7 +20,9 @@
   var fogNodes = [];
   var MAX_RAIN = 240;   // the pool; how many are drawn depends on how hard it rains (rainN)
   var MAX_SNOW = 320;
-  var rainN = 110, snowN = 160;
+  var PERF = root.MoonfinTV ? 0.6 : 1;   // the Samsung app draws fewer drops and flakes, on a canvas of a quarter of the pixels
+  var rainN = Math.round(110 * PERF), snowN = Math.round(160 * PERF);
+  var hushUntil = 0;   // while someone moves along the rows the drawing stands still (hush)
   var MAX_FOG = 4;
 
   var W = 1920;
@@ -221,6 +223,11 @@
     if (!running) return;
 
     var now = Date.now();
+    if (now < hushUntil) {   // someone is moving along the rows: leave the last picture as it is
+      lastTime = now;
+      rafId = root.requestAnimationFrame(renderLoop);
+      return;
+    }
     // 30 frames a second is plenty for slow rain and snow, and half the work for a weak box
     if (now - lastTime < 32) {
       rafId = root.requestAnimationFrame(renderLoop);
@@ -362,9 +369,11 @@
       canvas = canvasElement;
       lightingEl = lightingElement;
       if (canvas && canvas.getContext) {
-        canvas.width = W;
-        canvas.height = H;
+        // the Samsung app draws on half the width and height (a quarter of the pixels to clear and put on the screen each frame)
+        canvas.width = root.MoonfinTV ? W / 2 : W;
+        canvas.height = root.MoonfinTV ? H / 2 : H;
         ctx = canvas.getContext("2d");
+        if (root.MoonfinTV && ctx.setTransform) ctx.setTransform(0.5, 0, 0, 0.5, 0, 0);   // the drawing keeps its 1920x1080 numbers
         initParticlePool();
       }
       applyType();   // the weather may have been set before the canvas was
@@ -391,9 +400,9 @@
       var rn = { 51: 60, 53: 80, 55: 110, 56: 70, 57: 110, 61: 100, 63: 160, 65: 230, 66: 120, 67: 230, 80: 110, 81: 170, 82: 240, 95: 180, 96: 230, 99: 240 }[code];
       var sn = { 71: 90, 73: 170, 75: 280, 77: 90, 85: 140, 86: 280 }[code];
       var same = (rn && currentType === (code >= 95 ? "storm" : "rain")) || (sn && currentType === "snow");
-      var changed = (rn && rn !== rainN) || (sn && sn !== snowN);
-      if (rn) rainN = rn;
-      if (sn) snowN = sn;
+      var changed = (rn && Math.round(rn * PERF) !== rainN) || (sn && Math.round(sn * PERF) !== snowN);
+      if (rn) rainN = Math.round(rn * PERF);
+      if (sn) snowN = Math.round(sn * PERF);
       if (changed && same) applyType();   // the same weather, harder or softer
       if (STORM_CODES.indexOf(code) >= 0) {
         setWeatherType("storm");
@@ -449,6 +458,9 @@
     getType: function () {
       return currentType;
     },
+
+    // stand still for ms milliseconds (the page calls it on every key press)
+    hush: function (ms) { hushUntil = Date.now() + ms; },
 
     // a strike right now (a preview, and for tests); only in a storm
     strike: function () {

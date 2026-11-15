@@ -308,7 +308,7 @@ html.still .tile.focus .face, html.still .tile.focus .face::after { animation: n
 /* the places: a second picture layer over the first (its opacity is how far the sun or the weather has moved), the glass clock's second fill,
    and the dip through black when the place changes (app.js, "the places") */
 .scene .sbg2, .scene .fg2 { opacity: 0; }
-.gclock .fillb { position: absolute; left: 0; right: 0; top: 0; display: block; opacity: 0; }
+.gclock .fill.fillb { position: absolute; left: 0; right: 0; top: 0; display: none; opacity: 0; }   /* over the first fill, at the same place; app.js shows it and sets its opacity */
 .scenes { transition: opacity 1200ms ease-in-out; }
 .scenes.dip { opacity: 0; }
 .scenes.cut .scene { transition: none; }

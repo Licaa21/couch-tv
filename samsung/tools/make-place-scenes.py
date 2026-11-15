@@ -92,7 +92,7 @@ def make(pid):
             dx, dy = register(eb, im)
             im = shifted(im, dx, dy)
             name = "%s-%s" % (w, t)
-            im.save(os.path.join(out, name + ".jpg"), quality=86, optimize=True, progressive=True)
+            im.save(os.path.join(out, name + ".jpg"), quality=86, optimize=True, progressive=False)
             glass(im).save(os.path.join(out, name + "-glass.jpg"), quality=80, optimize=True)
             if mask is not None:
                 rgba = im.convert("RGBA")
