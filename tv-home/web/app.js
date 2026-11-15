@@ -1040,7 +1040,7 @@
   var PLACE_EVERY_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 21600, 43200, 86400, 172800, 0];   // 0: never changes
   var WX_DISSOLVE_STEPS = [15, 30, 60], PREVIEW_STEPS = [0, 60, 180, 600];
   var PLACE_RES = "auto", PLACE_RES_STEPS = ["auto", "1080", "4k"];   // picture detail: auto follows the screen (HI_RES), or 1080p, or 4K (the @2x files)
-  var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), DAY_PREV = 0, previewFrom = null, previewTimer = null, lastTickAt = 0, changing = false;
+  var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), DAY_PREV = 0, previewFrom = null, previewTimer = null, previewImgs = [], lastTickAt = 0, changing = false;
 
   function stepOf(list, v, d) { return list.indexOf(v) >= 0 ? v : d; }
   function readPlaceSettings() {
@@ -1136,7 +1136,7 @@
       var ok = function () { if (--left <= 0) fin(); };
       if (im.decode) im.decode().then(ok, ok); else ok();
     });
-    setTimeout(fin, 800);
+    setTimeout(fin, 20000);   // the pictures come over the network: a fade that starts before its picture is there shows nothing and then jumps
   }
   function placeRedraw(s, el) { if (glassShown) drawClocks(el, s, glassShown); }
 
@@ -1259,8 +1259,24 @@
     DAY_PREV = secs;
     clearInterval(previewTimer);
     previewFrom = null;
-    if (secs) { previewFrom = { real: Date.now(), virt: Date.now() }; previewTimer = setInterval(function () { sceneTick(true); }, 1000); }
-    sceneTick(true);
+    if (!secs) return sceneTick(true);
+    // the six pictures of this place's weather are fetched first: a day passes in a minute, too fast to fetch each one as its turn comes
+    var s = SCENES[scene], P = window.Places, wx = s && s.place ? placeTarget().wx : null, left = 0, started = false;
+    var start = function () {
+      if (started || DAY_PREV !== secs) return;
+      started = true;
+      previewFrom = { real: Date.now(), virt: Date.now() }; previewTimer = setInterval(function () { sceneTick(true); }, 1000);
+      sceneTick(true);
+    };
+    if (wx) {
+      previewImgs = P.TIMES.map(function (tm) {   // kept, so the TV does not drop them before they are shown
+        var im = new Image(); left++;
+        im.onload = im.onerror = function () { if (--left <= 0) start(); };
+        im.src = placeUrl(P.file(s.id, wx, tm), ".jpg");
+        return im;
+      });
+    }
+    setTimeout(start, wx ? 15000 : 0);
   }
 
   // Home settings, Scenes: the rows for the places
