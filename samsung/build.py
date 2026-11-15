@@ -41,7 +41,7 @@ LOGOS = os.path.join(ROOT, "remote", "src", "app-logos")
 ICON = os.path.join(ROOT, "remote", "public", "icons", "icon-512.png")
 OUT = os.path.join(ROOT, "build", "samsung")
 # The commit whose tv-home/web/backgrounds/places the app loads its pictures from (jsDelivr caches a commit for good). Only change it when the pictures change.
-PLACES_COMMIT = "e7b97481f8e38ae5110120ee3330b350f6395177"
+PLACES_COMMIT = "00e59e6fbf5d0c8ccfae6715bf81082d574eff97"
 
 
 def main():
