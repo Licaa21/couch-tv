@@ -660,7 +660,7 @@
     var iov = $("idle-ambient-overlay");
     if (iov) iov.classList.toggle("quiet-hours", isQuietHours(SMART_IDLE.quiet_hours));
     fitDate();
-    document.body.classList.toggle("night", h >= 21 || h < 6);
+    document.body.classList.toggle("night", (h >= 21 || h < 6) && !(NIGHT && SCENES[scene] && SCENES[scene].place));   // a place has night pictures of its own: no dimming filter over them
     if (NIGHT) { glassClock(hm); if (SUN_SYNC) applySunSync(); updateAmbientWeather(); }
     if (quickReady) renderQuick();
   }
@@ -766,8 +766,11 @@
       var el = document.createElement("div");
       el.className = "scene s-" + sceneClass(s);
       el.innerHTML = '<img class="sbg" alt="">' + (s.place ? '<img class="sbg2" alt="">' : "") + (s.video ? '<video class="svid" muted loop playsinline preload="none"></video>' : "") +
-        '<div class="shade"></div><div class="gclock"></div>' +
-        (s.water ? '<div class="gclock under"></div>' : "") + (s.fg ? '<img class="fg" alt="">' : "") + (s.place && s.fg ? '<img class="fg2" alt="">' : "");
+        '<div class="shade"></div>' + (s.place && s.fg ? '<div class="cmask"><div class="gclock"></div></div>' : '<div class="gclock"></div>') +
+        (s.water ? '<div class="gclock under"></div>' : "") + (s.fg && !s.place ? '<img class="fg" alt="">' : "");
+      // A place's clock goes behind the scenery through a mask over the clock (backgrounds/places/<id>/mask.png, samsung/tools/make-place-masks.py),
+      // not through a cut-out copy of every picture drawn over it: two full-screen layers fewer, half the downloads, and no seam along the ridge.
+      if (s.place && s.fg) { var cm = el.querySelector(".cmask"), mu = "url(backgrounds/places/" + s.id + "/mask.png)"; cm.style.webkitMaskImage = mu; cm.style.maskImage = mu; }
       if (s.mine) {   // your own scene: its clock from config.json (app.css, "your own scenes")
         el.className += " x-" + s.x + (s.inter ? " f-inter" : "") + (s.dark ? " t-dark" : "");
         el.style.setProperty("--my-top", s.y * 100 + "vh");
@@ -1037,14 +1040,16 @@
   var PLACE_EVERY_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 21600, 43200, 86400, 172800, 0];   // 0: never changes
   var WX_DISSOLVE_STEPS = [15, 30, 60], PREVIEW_STEPS = [0, 60, 180, 600];
   var PLACE_RES = "auto", PLACE_RES_STEPS = ["auto", "1080", "4k"];   // picture detail: auto follows the screen (HI_RES), or 1080p, or 4K (the @2x files)
-  var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), PREVIEW = 0, previewFrom = null, previewTimer = null, lastTickAt = 0, changing = false;
+  var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), DAY_PREV = 0, previewFrom = null, previewTimer = null, lastTickAt = 0, changing = false;
 
   function stepOf(list, v, d) { return list.indexOf(v) >= 0 ? v : d; }
   function readPlaceSettings() {
     PLACE_EVERY = stepOf(PLACE_EVERY_STEPS, parseInt(ST.place_every, 10), 3600);
     PLACE_RANDOM = ST.place_random === true;
     PLACE_FX = ST.place_fx === "dissolve" ? "dissolve" : "black";
-    SMOOTH_TIME = ST.smooth_time !== false;
+    // Samsung: off unless switched on. With it on, two full-screen pictures are blended on every frame the TV draws, all day (the lag in the rows);
+    // off, one picture shows and the next time of day dissolves in when its turn comes.
+    SMOOTH_TIME = typeof ST.smooth_time === "boolean" ? ST.smooth_time : !window.MoonfinTV;
     WX_DISSOLVE = stepOf(WX_DISSOLVE_STEPS, parseInt(ST.wx_dissolve, 10), 30);
     FIXED_TIME = window.Places.TIMES.indexOf(ST.fixed_time) >= 0 ? ST.fixed_time : "golden";
     FIXED_WX = window.Places.WEATHERS.indexOf(ST.fixed_weather) >= 0 ? ST.fixed_weather : "clear";
@@ -1054,7 +1059,7 @@
   // The sun's moment: now, or in a day preview the sped up day.
   function sunDate() {
     var n = Date.now();
-    return PREVIEW && previewFrom ? window.Places.previewDate(n, previewFrom.real, previewFrom.virt, PREVIEW) : new Date(n);
+    return DAY_PREV && previewFrom ? window.Places.previewDate(n, previewFrom.real, previewFrom.virt, DAY_PREV) : new Date(n);
   }
   function currentPhase() {
     var d = sunDate(), P = window.Places;
@@ -1148,7 +1153,7 @@
     if (L.A.wx !== T.wx) return placeDissolve(s, el, { wx: T.wx, k: T.pair.a });                 // the weather changed
     if (T.pair.b < 0) { if (L.A.k !== T.pair.a || L.B) placeDissolve(s, el, { wx: T.wx, k: T.pair.a }); return; }   // one picture wanted
     if (L.B && L.A.k === T.pair.a && L.B.k === T.pair.b) {   // the day drifts on: a step of 3 percent or more, then still (a layer that is always fading costs every frame)
-      if (Math.abs(T.pair.p - L.pB) >= (PREVIEW ? 0.004 : 0.03)) { L.pB = T.pair.p; placeBlend(el, L.pB, PREVIEW ? 1.2 : 4); }
+      if (Math.abs(T.pair.p - L.pB) >= (DAY_PREV ? 0.004 : 0.03)) { L.pB = T.pair.p; placeBlend(el, L.pB, DAY_PREV ? 1.2 : 4); }
       return;
     }
     if (L.B && L.B.k === T.pair.a && L.pB > 0.9) return placeCommit(s, el, L, function () { placeUpdate(i); });       // the day moved on a step
@@ -1157,7 +1162,7 @@
       var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2");
       b2.src = placeUrl(placeKey(s, L.B), ".jpg"); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
       s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
-      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; L.pB = T.pair.p; placeBlend(el, L.pB, PREVIEW ? 1.2 : 4); });
+      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; L.pB = T.pair.p; placeBlend(el, L.pB, DAY_PREV ? 1.2 : 4); });
       return;
     }
     placeDissolve(s, el, { wx: T.wx, k: T.pair.a });   // anything else (back from a long wait, a new setting): dissolve to the wanted picture
@@ -1250,7 +1255,7 @@
   function applySunSync() { sceneTick(true); }
   function nextScene() { sceneTick(); }
   function setPreview(secs) {
-    PREVIEW = secs;
+    DAY_PREV = secs;
     clearInterval(previewTimer);
     previewFrom = null;
     if (secs) { previewFrom = { real: Date.now(), virt: Date.now() }; previewTimer = setInterval(function () { sceneTick(true); }, 1000); }
@@ -1298,8 +1303,8 @@
     rows.push({ kind: "cycle", key: "wx-dissolve", label: t("wx_dissolve"), sub: t("wx_dissolve_sub"), value: t("n_secs", { n: WX_DISSOLVE }), act: function () {
       WX_DISSOLVE = cycleOf(WX_DISSOLVE_STEPS, WX_DISSOLVE); ST.wx_dissolve = WX_DISSOLVE; saveSettings();
     } });
-    rows.push({ kind: "cycle", key: "day-preview", label: t("day_preview"), sub: t("day_preview_sub"), value: PREVIEW ? t("day_preview_n", { n: PREVIEW / 60 }) : t("off"), act: function () {
-      setPreview(cycleOf(PREVIEW_STEPS, PREVIEW));   // not saved: off again after a restart
+    rows.push({ kind: "cycle", key: "day-preview", label: t("day_preview"), sub: t("day_preview_sub"), value: DAY_PREV ? t("day_preview_n", { n: DAY_PREV / 60 }) : t("off"), act: function () {
+      setPreview(cycleOf(PREVIEW_STEPS, DAY_PREV));   // not saved: off again after a restart
     } });
   }
 

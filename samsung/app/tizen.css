@@ -301,3 +301,9 @@ html.cp-apps-open #cp .cp-grid, html.cp-apps-open #cp .cp-hint { visibility: hid
 /* Lighter home hides the weather layers on every other TV; here they stay, because the Samsung app slides them as tiles on the graphics chip
    (rain, snow and fog: ambient-weather.js, app.css "weather layers"). Switch them off in Home settings, Weather, Ambient weather effects. */
 html.lighter .weather-canvas, html.lighter .wx-layers.on { display: block !important; }
+/* No filter over the full-screen pictures (the Night lake had brightness 0.86 on every layer, and all of them 0.72 after 9 pm): the TV applies
+   a filter again on every frame it draws. The places' night pictures are dark by themselves. Under Lighter home the clock has no soft shadow either. */
+.scene .sbg, .scene .sbg2 { filter: none !important; }
+html.lighter .scene .gclock:not(.under) { filter: none !important; }
+/* Lighter home: one layer of rain or snow, not two (each is a full screen the TV blends on every frame) */
+html.lighter .wx-layers .wx-l.near { display: none !important; }

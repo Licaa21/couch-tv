@@ -56,13 +56,13 @@ def main():
     if os.path.isdir(stage):
         shutil.rmtree(stage)
     # The 30 pictures of each place (280 MB) are not packed: Apps2Samsung could not install that. The app loads them from jsDelivr (the commit
-    # PLACES_COMMIT of this repo, see places_url below); only each place's thumb.jpg stays in the app, for Home settings.
+    # PLACES_COMMIT of this repo, see places_url below); only each place's thumb.jpg (for Home settings) and mask.png (the clock behind the scenery) stay in the app.
     base_ignore = shutil.ignore_patterns("mock.js", ".*")
 
     def ignore(d, names):
         gone = set(base_ignore(d, names))
         if os.path.basename(os.path.dirname(d)) == "places":
-            gone |= {n for n in names if n != "thumb.jpg"}
+            gone |= {n for n in names if n not in ("thumb.jpg", "mask.png")}
         return gone
     shutil.copytree(WEB, stage, ignore=ignore)
     for name in os.listdir(os.path.join(HERE, "app")):

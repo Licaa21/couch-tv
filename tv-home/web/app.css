@@ -342,6 +342,9 @@ html.still .tile.focus .face, html.still .tile.focus .face::after { animation: n
 /* the places: a second picture layer over the first (its opacity is how far the sun or the weather has moved), the glass clock's second fill,
    and the dip through black when the place changes (app.js, "the places") */
 .scene .sbg2, .scene .fg2 { opacity: 0; }
+.has-video .scene .cmask { -webkit-mask-image: none !important; mask-image: none !important; }   /* the scenery is not drawn under a video background */
+.s-fog .gclock .fill { transition: filter 3s linear, opacity 3s linear; }   /* dark digits to light glass (below) without a jump */
+.scene .cmask { position: absolute; top: 0; right: 0; bottom: 0; left: 0; -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }   /* a place's clock behind its scenery (app.js buildScenes) */
 .gclock .fill.fillb { position: absolute; left: 0; right: 0; top: 0; display: none; opacity: 0; }   /* over the first fill, at the same place; app.js shows it and sets its opacity */
 .scenes { transition: opacity 1200ms ease-in-out; }
 .scenes.dip { opacity: 0; }
@@ -1983,3 +1986,8 @@ html:not(.kids-on) .kids { display: none; }
 }
 
 
+
+/* Pine fog on a dark picture (night, dusk: html.date-light, set by app.js placeTone): the clock is light glass, not the dark digits made for the white mist */
+html.date-light:not(.clock-liquid):not(.has-video) .s-fog .gclock .fill { filter: brightness(2.3) saturate(0.9); opacity: 0.85; }
+html.date-light:not(.clock-liquid):not(.has-video) .s-fog .gclock .rim { color: rgba(255, 255, 255, 0.06); -webkit-text-stroke-color: rgba(255, 255, 255, 0.5); }
+html.date-light:not(.clock-liquid):not(.has-video) .s-fog .gclock .sheen { display: block; }
