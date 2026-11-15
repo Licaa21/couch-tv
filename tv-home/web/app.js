@@ -1092,11 +1092,30 @@
   function placeHi() { return PLACE_RES === "4k" || (PLACE_RES === "auto" && HI_RES); }
   // Samsung: the pictures are not in the app (303 MB would not install): settings.js says where they are (a pinned commit on jsDelivr); else the local folder
   function placeUrl(key, ext) { return PLACES_BASE + key + (placeHi() ? ext.replace(/(\.\w+)$/, "@2x$1") : ext); }
+  // Day preview only: one long fade per time of day, run by the graphics chip alone (opacity 0 to 1 over exactly the time the preview takes to
+  // walk from this share to the next picture). Before, the fade was aimed again every second, and a TV that hiccuped for a moment let it drift
+  // and then pulled it back. L.g = {t0, p0, dur}; the real day keeps its small steps (a layer that fades for an hour costs every frame).
+  function placeNow(L) {   // how far the second picture shows now
+    if (!L.g) return L.pB;
+    return Math.min(1, L.g.p0 + (1 - L.g.p0) * (Date.now() - L.g.t0) / (L.g.dur * 1000));
+  }
+  function startGlide(s, el, L, from) {
+    from = Math.max(0.002, Math.min(from, 0.998));
+    var dur = (1 - from) * DAY_PREV / 6;   // seconds until the phase reaches the next picture
+    L.g = { t0: Date.now(), p0: from, dur: Math.max(0.3, dur) }; L.pB = 1;   // (pB is the target while a long fade runs: placeNow is how far it has got)
+    placeBlend(el, from, 0); void el.offsetWidth; placeBlend(el, 1, L.g.dur);
+    var nx = placeUrl(window.Places.file(s.id, L.B.wx, window.Places.TIMES[(L.B.k + 1) % 6]), ".jpg");   // the one after: fetched while this one fades
+    if (L.pre !== nx) { L.pre = nx; (new Image()).src = nx; }
+    if (from < 0.5) setTimeout(function () { if (s.L === L) placeTone(s); }, (0.5 - from) / (1 - from) * L.g.dur * 1000);   // the date changes colour half way
+    placeRedraw(s, el);
+    clearTimeout(L.gt);   // the hand-over to the next picture is on time, not at the next tick
+    L.gt = setTimeout(function () { if (s.L === L && L.g) placeUpdate(SCENES.indexOf(s)); }, L.g.dur * 1000 + 130);
+  }
   // The date line is dark on a bright sky and light on a dark one (places-meta.js, made by make-place-scenes.py: one 0 or 1 for each of the 30 pictures)
   function placeTone(s) {
     var meta = window.PLACE_DATE && window.PLACE_DATE[s.id], L = s.L;
     if (!meta || !L || SCENES[scene] !== s) return;
-    var sp = L.B && L.pB >= 0.5 ? L.B : L.A, P = window.Places, i = P.WEATHERS.indexOf(sp.wx) * 6 + sp.k, root = document.documentElement;
+    var sp = L.B && placeNow(L) >= 0.5 ? L.B : L.A, P = window.Places, i = P.WEATHERS.indexOf(sp.wx) * 6 + sp.k, root = document.documentElement;
     var dark = meta.charAt(i) === "1";
     root.classList.toggle("date-dark", dark);
     root.classList.toggle("date-light", !dark);
@@ -1124,9 +1143,11 @@
     f2.style.backgroundImage = s.curB && s.curA ? f.style.backgroundImage.split(s.curA).join(s.curB) : "none";
     f2.style.backgroundSize = f.style.backgroundSize;
     f2.style.backgroundPosition = f.style.backgroundPosition;
-    var pb = s.L && s.curB ? s.L.pB : 0;
+    var L = s.L, pb = L && s.curB ? placeNow(L) : 0;
+    if (L && L.g) fb.style.transition = "none";
     fb.style.opacity = pb;
     fb.style.display = pb > 0.001 ? "block" : "none";   // not drawn while it shows nothing
+    if (L && L.g && s.curB) { var left = L.g.dur - (Date.now() - L.g.t0) / 1000; if (left > 0.2) { void fb.offsetWidth; fb.style.transition = "opacity " + left + "s linear"; fb.style.opacity = 1; } }   // the clock's glass goes on with the same fade
   }
   function placeImgs(s, el) {   // put the pictures of s.L into the layers (no fade)
     var L = s.L, A = placeKey(s, L.A), B = L.B ? placeKey(s, L.B) : "", fg = el.querySelector(".fg"), fg2 = el.querySelector(".fg2");
@@ -1163,11 +1184,14 @@
     if (L.A.wx !== T.wx) return placeDissolve(s, el, { wx: T.wx, k: T.pair.a });                 // the weather changed
     if (T.pair.b < 0) { if (L.A.k !== T.pair.a || L.B) placeDissolve(s, el, { wx: T.wx, k: T.pair.a }); return; }   // one picture wanted
     if (L.B && L.A.k === T.pair.a && L.B.k === T.pair.b) {   // the day drifts on: a step of 3 percent or more, then still (a layer that is always fading costs every frame)
-      if (Math.abs(T.pair.p - L.pB) >= (DAY_PREV ? 0.004 : 0.03)) { L.pB = T.pair.p; placeBlend(el, L.pB, DAY_PREV ? 1.2 : 4); }
+      if (DAY_PREV) { if (!L.g || Math.abs(T.pair.p - placeNow(L)) > 0.08) startGlide(s, el, L, T.pair.p); return; }   // on course, nothing to do
+      if (L.g) { L.pB = placeNow(L); placeBlend(el, L.pB, 0); L.g = null; clearTimeout(L.gt); }   // the preview was switched off: its long fade stops where it is
+      if (Math.abs(T.pair.p - L.pB) >= 0.03) { L.pB = T.pair.p; placeBlend(el, L.pB, 4); }
       return;
     }
     if (L.B && L.B.k === T.pair.a && L.B.wx === T.wx) {   // the day moved on a step: finish the fade wherever a late tick left it (it used to fall into the weather path below: a hold, then a jump), then hand over
-      if (L.pB < 0.95) { L.pB = 1; L.busy = true; placeBlend(el, 1, 1); setTimeout(function () { if (s.L !== L) return; L.busy = false; placeUpdate(i); }, 1200); return; }
+      if (L.g && Date.now() < L.g.t0 + L.g.dur * 1000 + 100) return;   // the long fade is on its last moments
+      if (placeNow(L) < 0.95) { L.g = null; clearTimeout(L.gt); L.pB = 1; L.busy = true; placeBlend(el, 1, 1); setTimeout(function () { if (s.L !== L) return; L.busy = false; placeUpdate(i); }, 1200); return; }
       return placeCommit(s, el, L, function () { placeUpdate(i); });
     }
     if (L.A.k === T.pair.a && !L.B) {                                                                               // the next picture comes in under the first
@@ -1175,7 +1199,7 @@
       var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2");
       b2.src = placeUrl(placeKey(s, L.B), ".jpg"); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
       s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
-      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; L.pB = T.pair.p; placeBlend(el, L.pB, DAY_PREV ? 1.2 : 4); });
+      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; if (DAY_PREV) { L.pB = 0; return placeUpdate(i); } L.pB = T.pair.p; placeBlend(el, L.pB, 4); });
       return;
     }
     placeDissolve(s, el, { wx: T.wx, k: T.pair.a });   // anything else (back from a long wait, a new setting): dissolve to the wanted picture
@@ -1188,7 +1212,7 @@
     sb.src = placeUrl(A, ".jpg"); if (fg) fg.src = placeUrl(A, "-fg.webp");
     whenDecoded([sb].concat(fg ? [fg] : []), function () {
       if (s.L !== L) return;
-      L.A = L.B; L.B = null; L.pB = 0; s.curA = A; s.curB = "";
+      L.A = L.B; L.B = null; L.pB = 0; L.g = null; clearTimeout(L.gt); s.curA = A; s.curB = "";
       placeBlend(el, 0, 0);
       el.querySelector(".sbg2").removeAttribute("src"); var f2 = el.querySelector(".fg2"); if (f2) f2.removeAttribute("src");
       placeRedraw(s, el);
@@ -1201,6 +1225,7 @@
   function placeDissolve(s, el, spec) {
     var L = s.L, quick = L.guess && !!data.weather, secs = DAY_PREV ? 2 : quick ? 3 : WX_DISSOLVE, fold = DAY_PREV ? 1 : 8;   // the first weather after the start comes in quickly: it is a correction, not a change
     L.guess = false;
+    if (L.g) { L.pB = placeNow(L); L.g = null; clearTimeout(L.gt); placeBlend(el, L.pB, 0); }   // a long fade is stopped where it is
     L.busy = true;
     var next = function () {
       if (s.L !== L) return;
