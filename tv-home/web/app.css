@@ -365,7 +365,7 @@ html.still .tile.focus .face, html.still .tile.focus .face::after { animation: n
   background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.22) 100%);
 }
 /* after 9 pm everything dims a little */
-.night .scene:not(.place) .sbg, .night .scene:not(.place) .fg, .night .scene:not(.place) .sbg2, .night .scene:not(.place) .fg2, .night .scene .gclock { filter: brightness(0.72); }
+.night .scene:not(.pl) .sbg, .night .scene:not(.pl) .fg, .night .scene:not(.pl) .sbg2, .night .scene:not(.pl) .fg2, .night .scene .gclock { filter: brightness(0.72); }
 .theme-night .scrim { background: linear-gradient(180deg, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.5) 100%); }
 
 /* 4 Night: the clock behind the peak, pink glass */
@@ -1993,4 +1993,4 @@ html.pic-night:not(.clock-liquid):not(.has-video) .s-fog .gclock .sheen { displa
 
 /* A bright sky behind the clock (html.date-dark, set by app.js placeTone): the glass is a deeper shade of the sky, not a pale one that is lost in it */
 html.date-dark:not(.clock-liquid):not(.has-video) .scene:not(.s-fog) .gclock .fill { filter: brightness(0.4) saturate(1.3); opacity: 1; }
-.scene.place .gclock .fill { transition: filter 3s linear, opacity 3s linear; }   /* a place's clock changes shade gradually */
+.scene.pl .gclock .fill { transition: filter 3s linear, opacity 3s linear; }   /* a place's clock changes shade gradually */

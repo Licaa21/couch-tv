@@ -765,7 +765,7 @@
     var box = $("scenes");
     sceneEls = SCENES.map(function (s) {
       var el = document.createElement("div");
-      el.className = "scene s-" + sceneClass(s) + (s.place ? " place" : "");
+      el.className = "scene s-" + sceneClass(s) + (s.place ? " pl" : "");
       el.innerHTML = '<img class="sbg" alt="">' + (s.place ? '<img class="sbg2" alt="">' : "") + (s.video ? '<video class="svid" muted loop playsinline preload="none"></video>' : "") +
         '<div class="shade"></div>' + (s.place && s.fg ? '<div class="cmask"><div class="gclock"></div></div>' : '<div class="gclock"></div>') +
         (s.water ? '<div class="gclock under"></div>' : "") + (s.fg && !s.place ? '<img class="fg" alt="">' : "");
