@@ -1074,7 +1074,7 @@
   function placeTarget() {
     var P = window.Places;
     if (!SUN_SYNC) return { wx: FIXED_WX, pair: { a: P.TIMES.indexOf(FIXED_TIME), b: -1, p: 0 } };
-    return { wx: P.weatherSet(weatherKind(data.weather && data.weather.code)), pair: P.pairFor(currentPhase(), SMOOTH_TIME) };
+    return { wx: P.weatherSet(weatherKind(data.weather && data.weather.code)), pair: P.pairFor(currentPhase(), SMOOTH_TIME || !!DAY_PREV)   /* the Day preview always drifts: in steps it would jump, a day passes in a minute */ };
   }
 
   function placeKey(s, sp) { return window.Places.file(s.id, sp.wx, window.Places.TIMES[sp.k]); }
