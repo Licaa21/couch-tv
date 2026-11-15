@@ -830,11 +830,11 @@
         // 1 and 2 use the frosted copy instead, so the glass reads as frosted.
         var cx = c.offsetLeft + c.offsetWidth / 2, cy = c.offsetTop + c.offsetHeight / 2, LENS = 1.07;
         var frost = GLASS_AMT <= 2 && s.glass && !s.src;
-        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + ph + (frost ? "-glass" : "") + ".jpg)";
+        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(" + (s.place ? PLACES_BASE : "backgrounds/") + ph + (frost ? "-glass" : "") + ".jpg)";
         f.style.backgroundSize = LENS * 100 + "vw " + LENS * 100 + "vh";
         f.style.backgroundPosition = (-ex - (LENS - 1) * cx) + "px calc(" + (-ey - (LENS - 1) * cy) + "px + var(--cdy, 0px) * " + LENS + ")";
       } else {
-        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(backgrounds/" + ph + (s.glass ? "-glass" : "") + ".jpg)";
+        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(" + (s.place ? PLACES_BASE : "backgrounds/") + ph + (s.glass ? "-glass" : "") + ".jpg)";
         // --cdy: how far the Samsung app has lifted this clock (a transform): the photo in the digits stays the one behind them
         f.style.backgroundPosition = -ex + "px calc(" + -ey + "px + var(--cdy, 0px))";
       }
@@ -1075,7 +1075,9 @@
   function placeKey(s, sp) { return window.Places.file(s.id, sp.wx, window.Places.TIMES[sp.k]); }
   // 4K or 1080p pictures: <weather>-<time>@2x.jpg and -fg@2x.webp are the 4K ones (the glass copy is blurred, so one size does for both)
   function placeHi() { return PLACE_RES === "4k" || (PLACE_RES === "auto" && HI_RES); }
-  function placeUrl(key, ext) { return "backgrounds/" + key + (placeHi() ? ext.replace(/(\.\w+)$/, "@2x$1") : ext); }
+  // Samsung: the pictures are not in the app (303 MB would not install): settings.js says where they are (a pinned commit on jsDelivr); else the local folder
+  var PLACES_BASE = (window.COUCH_TIZEN && window.COUCH_TIZEN.places) || "backgrounds/";
+  function placeUrl(key, ext) { return PLACES_BASE + key + (placeHi() ? ext.replace(/(\.\w+)$/, "@2x$1") : ext); }
   // The date line is dark on a bright sky and light on a dark one (places-meta.js, made by make-place-scenes.py: one 0 or 1 for each of the 30 pictures)
   function placeTone(s) {
     var meta = window.PLACE_DATE && window.PLACE_DATE[s.id], L = s.L;

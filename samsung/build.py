@@ -40,6 +40,8 @@ WEB = os.path.join(ROOT, "tv-home", "web")
 LOGOS = os.path.join(ROOT, "remote", "src", "app-logos")
 ICON = os.path.join(ROOT, "remote", "public", "icons", "icon-512.png")
 OUT = os.path.join(ROOT, "build", "samsung")
+# The commit whose tv-home/web/backgrounds/places the app loads its pictures from (jsDelivr caches a commit for good). Only change it when the pictures change.
+PLACES_COMMIT = "e7b97481f8e38ae5110120ee3330b350f6395177"
 
 
 def main():
@@ -53,7 +55,16 @@ def main():
     stage = os.path.join(OUT, "app")
     if os.path.isdir(stage):
         shutil.rmtree(stage)
-    shutil.copytree(WEB, stage, ignore=shutil.ignore_patterns("mock.js", ".*"))
+    # The 30 pictures of each place (280 MB) are not packed: Apps2Samsung could not install that. The app loads them from jsDelivr (the commit
+    # PLACES_COMMIT of this repo, see places_url below); only each place's thumb.jpg stays in the app, for Home settings.
+    base_ignore = shutil.ignore_patterns("mock.js", ".*")
+
+    def ignore(d, names):
+        gone = set(base_ignore(d, names))
+        if os.path.basename(os.path.dirname(d)) == "places":
+            gone |= {n for n in names if n != "thumb.jpg"}
+        return gone
+    shutil.copytree(WEB, stage, ignore=ignore)
     for name in os.listdir(os.path.join(HERE, "app")):
         shutil.copy(os.path.join(HERE, "app", name), stage)
     shutil.copy(ICON, os.path.join(stage, "icon.png"))
@@ -142,7 +153,8 @@ def main():
     with open(os.path.join(HERE, "VERSION"), encoding="utf-8") as vf:   # the release number, shown in Home settings > About
         version = vf.read().strip()
     settings = {"bridge": a.bridge.rstrip("/"), "tv": a.tv, "log": a.log_url.rstrip("/"), "sky_hdmi": sky, "key": key,
-                "version": version, "repo": "github.com/Licaa21/couch-tv"}
+                "version": version, "repo": "github.com/Licaa21/couch-tv",
+                "places": "https://cdn.jsdelivr.net/gh/Licaa21/couch-tv@" + PLACES_COMMIT + "/tv-home/web/backgrounds/"}
     with open(os.path.join(stage, "settings.js"), "w") as f:
         f.write("window.COUCH_TIZEN = " + json.dumps(settings) + ";\n")
     table = {}
