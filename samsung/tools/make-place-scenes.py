@@ -107,6 +107,76 @@ def make(pid):
     print("%-7s %d pictures, %.1f MB" % (pid, n, size))
 
 
+def hires(pid):
+    """The 4K copies: <weather>-<time>@2x.jpg (3840x2160) and, where the place has a cut-out, <weather>-<time>-fg@2x.webp. The same nudge as the
+    1080p picture (twice the pixels), and the old scene's own 2730x1536 cut-out stretched to 4K. The app uses them when Home settings, Picture
+    detail says 4K (or Auto on a screen that reports 4K)."""
+    folder, base, has_fg = PLACES[pid]
+    src = os.path.join(NEW, folder + "-4k")
+    if not os.path.isdir(src):
+        print("skip %s: no %s" % (pid, src))
+        return
+    out = os.path.join(BG, "places", pid)
+    base1 = Image.open(os.path.join(BG, base + ".jpg")).convert("RGB")
+    eb = edges(base1, (480, 270))
+    mask = None
+    if has_fg:
+        mask = Image.open(os.path.join(BG, base + "-fg@2x.webp")).convert("RGBA").split()[3].resize((3840, 2160), Image.LANCZOS)
+    n = 0
+    for w in WEATHERS:
+        for t in TIMES:
+            path = os.path.join(src, "%s-%s.jpg" % (w, t))
+            if not os.path.exists(path):
+                continue
+            big = Image.open(path).convert("RGB")
+            if big.size != (3840, 2160):
+                big = big.resize((3840, 2160), Image.LANCZOS)
+            dx, dy = register(eb, big.resize((1920, 1080), Image.LANCZOS))
+            big = shifted(big, dx * 2, dy * 2)
+            name = "%s-%s" % (w, t)
+            big.save(os.path.join(out, name + "@2x.jpg"), quality=80, optimize=True, progressive=False)
+            if mask is not None:
+                rgba = big.convert("RGBA")
+                rgba.putalpha(mask)
+                rgba.save(os.path.join(out, name + "-fg@2x.webp"), quality=80, method=4)
+            n += 1
+    size = sum(os.path.getsize(os.path.join(out, f)) for f in os.listdir(out) if "@2x" in f) / 1e6
+    print("%-7s %d 4K pictures, %.1f MB" % (pid, n, size))
+
+
+# Where each place's date line sits (1920x1080 pixels; from the scene css in app.css): the sky behind it decides whether the date is dark or light.
+DATE_BOX = {"golden": (760, 95, 1160, 165), "water": (760, 205, 1160, 275), "dawn": (760, 165, 1160, 235),
+            "fog": (100, 110, 640, 175), "night": (760, 95, 1160, 165)}
+
+
+def meta():
+    """tv-home/web/places-meta.js: for every place a string of 30 characters (weather x time, in the order of WEATHERS and TIMES), "1" where the
+    sky behind the date is bright (the date is drawn dark) and "0" where it is dark (light date)."""
+    out = {}
+    for pid in PLACES:
+        s = ""
+        for w in WEATHERS:
+            for t in TIMES:
+                path = os.path.join(BG, "places", pid, "%s-%s.jpg" % (w, t))
+                if not os.path.exists(path):
+                    s += "0"
+                    continue
+                lum = float(np.asarray(Image.open(path).convert("L").crop(DATE_BOX[pid]), np.float32).mean())
+                s += "1" if lum >= 140 else "0"
+        out[pid] = s
+    with open(os.path.join(ROOT, "tv-home", "web", "places-meta.js"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("// made by samsung/tools/make-place-scenes.py (--meta): 1 = a bright sky behind the date (dark date), 0 = a dark sky\n")
+        f.write("window.PLACE_DATE = %s;\n" % repr(out).replace("'", '"'))
+    print("places-meta.js:", {k: v.count("1") for k, v in out.items()}, "bright pictures of 30")
+
+
 if __name__ == "__main__":
-    for pid in (sys.argv[1:] or list(PLACES)):
-        make(pid)
+    if sys.argv[1:] == ["--meta"]:
+        meta()
+    elif sys.argv[1:2] == ["--hires"]:
+        for pid in (sys.argv[2:] or list(PLACES)):
+            hires(pid)
+    else:
+        for pid in (sys.argv[1:] or list(PLACES)):
+            make(pid)
+        meta()

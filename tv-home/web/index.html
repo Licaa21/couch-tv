@@ -17,6 +17,8 @@
 <!-- Ambient Weather & Solar Celestial Lighting Overlays -->
 <div class="ambient-lighting" id="ambient-lighting" aria-hidden="true"></div>
 <canvas class="weather-canvas" id="weather-canvas" aria-hidden="true"></canvas>
+<!-- rain, snow and fog: tiles that slide on their own layers (app.css, "weather layers"); the canvas above only draws lightning -->
+<div class="wx-layers" id="wx-layers" aria-hidden="true"><div class="wx-wrap"><div class="wx-l far"></div><div class="wx-l near"></div></div></div>
 <div class="scrim" aria-hidden="true"></div>
 
 <header class="top">
@@ -161,6 +163,7 @@
 <script src="spotify-player.js"></script>
 <script src="cards.js"></script>
 <script src="places.js"></script>
+<script src="places-meta.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

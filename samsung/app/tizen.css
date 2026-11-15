@@ -301,4 +301,4 @@ html.cp-apps-open #cp .cp-grid, html.cp-apps-open #cp .cp-hint { visibility: hid
 /* Lighter home hides the weather canvas on every other TV; here it stays, because the Samsung app draws it cheaply
    (half the width and height, fewer drops and flakes, standing still while the rows move: ambient-weather.js). Switch it
    off in Home settings, Weather, Ambient weather effects. */
-html.lighter .weather-canvas { display: block !important; }
+html.lighter .weather-canvas, html.lighter .wx-layers.on { display: block !important; }

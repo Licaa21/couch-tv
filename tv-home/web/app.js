@@ -937,6 +937,7 @@
         root.style.setProperty("--my-size", s.size * 100 + "vh");
       }
       root.className = root.className.replace(/\b(scene|mine)-\w+/g, "").replace(/\s+/g, " ").trim() + cls;
+      if (s.place) placeTone(s); else root.classList.remove("date-dark", "date-light");
       root.style.setProperty("--cdy-r", sceneEls[i].style.getPropertyValue("--cdy") || "0px");   // the date rises with this scene's clock
       date.classList.remove("swap");
       fitDate();
@@ -1035,6 +1036,7 @@
   var PLACE_EVERY = 3600, PLACE_RANDOM = false, PLACE_FX = "black", SMOOTH_TIME = true, WX_DISSOLVE = 30, FIXED_TIME = "golden", FIXED_WX = "clear";
   var PLACE_EVERY_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 21600, 43200, 86400, 172800, 0];   // 0: never changes
   var WX_DISSOLVE_STEPS = [15, 30, 60], PREVIEW_STEPS = [0, 60, 180, 600];
+  var PLACE_RES = "auto", PLACE_RES_STEPS = ["auto", "1080", "4k"];   // picture detail: auto follows the screen (HI_RES), or 1080p, or 4K (the @2x files)
   var PLACE_EPOCH = new Date(2024, 0, 1).getTime(), PREVIEW = 0, previewFrom = null, previewTimer = null, lastTickAt = 0, changing = false;
 
   function stepOf(list, v, d) { return list.indexOf(v) >= 0 ? v : d; }
@@ -1046,6 +1048,7 @@
     WX_DISSOLVE = stepOf(WX_DISSOLVE_STEPS, parseInt(ST.wx_dissolve, 10), 30);
     FIXED_TIME = window.Places.TIMES.indexOf(ST.fixed_time) >= 0 ? ST.fixed_time : "golden";
     FIXED_WX = window.Places.WEATHERS.indexOf(ST.fixed_weather) >= 0 ? ST.fixed_weather : "clear";
+    PLACE_RES = stepOf(PLACE_RES_STEPS, ST.place_res, "auto");
   }
 
   // The sun's moment: now, or in a day preview the sped up day.
@@ -1070,7 +1073,18 @@
   }
 
   function placeKey(s, sp) { return window.Places.file(s.id, sp.wx, window.Places.TIMES[sp.k]); }
-  function placeUrl(key, ext) { return "backgrounds/" + key + ext; }
+  // 4K or 1080p pictures: <weather>-<time>@2x.jpg and -fg@2x.webp are the 4K ones (the glass copy is blurred, so one size does for both)
+  function placeHi() { return PLACE_RES === "4k" || (PLACE_RES === "auto" && HI_RES); }
+  function placeUrl(key, ext) { return "backgrounds/" + key + (placeHi() ? ext.replace(/(\.\w+)$/, "@2x$1") : ext); }
+  // The date line is dark on a bright sky and light on a dark one (places-meta.js, made by make-place-scenes.py: one 0 or 1 for each of the 30 pictures)
+  function placeTone(s) {
+    var meta = window.PLACE_DATE && window.PLACE_DATE[s.id], L = s.L;
+    if (!meta || !L || SCENES[scene] !== s) return;
+    var sp = L.B && L.pB >= 0.5 ? L.B : L.A, P = window.Places, i = P.WEATHERS.indexOf(sp.wx) * 6 + sp.k, root = document.documentElement;
+    var dark = meta.charAt(i) === "1";
+    root.classList.toggle("date-dark", dark);
+    root.classList.toggle("date-light", !dark);
+  }
   function placeBlend(el, p, secs) {   // layer 2 at opacity p, getting there over secs seconds (0: at once)
     var l = el.querySelectorAll(".sbg2, .fg2, .fillb");
     // not drawn at all while it shows nothing: on a slow TV every full-screen layer costs while the clock moves or the rows scroll
@@ -1079,6 +1093,11 @@
       l[i].style.transition = secs ? "opacity " + secs + "s linear" : "none";
       l[i].style.opacity = p;
       if (p <= 0.001 && !secs) l[i].style.display = "none";
+    }
+    var k = sceneEls.indexOf(el);
+    if (k >= 0 && SCENES[k] && SCENES[k].place) {
+      if (secs > 8 && p > 0.5) setTimeout(function () { placeTone(SCENES[k]); }, secs * 500);   // a slow dissolve: the date changes half way
+      else placeTone(SCENES[k]);
     }
   }
   // the glass clock's second fill: the picture over this one, at the same place behind the digits
@@ -1251,6 +1270,11 @@
     } });
     rows.push({ kind: "cycle", key: "place-order", label: t("place_order"), value: PLACE_RANDOM ? t("place_random") : t("place_in_order"), act: function () {
       PLACE_RANDOM = !PLACE_RANDOM; ST.place_random = PLACE_RANDOM; saveSettings();
+    } });
+    rows.push({ kind: "cycle", key: "place-res", label: t("place_res"), sub: t("place_res_sub"), value: t("place_res_" + PLACE_RES), act: function () {
+      PLACE_RES = cycleOf(PLACE_RES_STEPS, PLACE_RES); ST.place_res = PLACE_RES; saveSettings();
+      var sc = SCENES[scene];
+      if (sc && sc.place && sceneEls[scene] && sceneEls[scene].classList.contains("ready")) { sc.L = null; placeUpdate(scene, true); placeRedraw(sc, sceneEls[scene]); }   // drawn again with the other files
     } });
     rows.push({ kind: "cycle", key: "place-fx", label: t("place_fx"), sub: t("place_fx_sub"), value: PLACE_FX === "black" ? t("place_fx_black") : t("place_fx_dissolve"), act: function () {
       PLACE_FX = PLACE_FX === "black" ? "dissolve" : "black"; ST.place_fx = PLACE_FX; saveSettings();
