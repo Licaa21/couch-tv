@@ -15,6 +15,10 @@ from PIL import Image, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for pid in ("golden", "dawn", "fog", "night"):
     a = Image.open(os.path.join(sys.argv[1], pid + ".webp")).convert("RGBA").split()[3].resize((1920, 1080), Image.LANCZOS)
+    if pid == "fog":   # the old scene's ridge dipped at the far left; the places' pictures have a level ridge there (the foot of the first digit hung lower)
+        px = np.asarray(a, np.uint8).copy()
+        px[497:, :250] = 255
+        a = Image.fromarray(px)
     a = a.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(3))   # the scenery grown by 2px, then a soft edge: no hard line where the digits end
     sky = 255 - np.asarray(a, np.uint8)
     out = Image.new("LA", (1920, 1080), 0)

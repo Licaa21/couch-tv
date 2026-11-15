@@ -940,7 +940,7 @@
         root.style.setProperty("--my-size", s.size * 100 + "vh");
       }
       root.className = root.className.replace(/\b(scene|mine)-\w+/g, "").replace(/\s+/g, " ").trim() + cls;
-      if (s.place) placeTone(s); else root.classList.remove("date-dark", "date-light");
+      if (s.place) placeTone(s); else root.classList.remove("date-dark", "date-light", "pic-night");
       root.style.setProperty("--cdy-r", sceneEls[i].style.getPropertyValue("--cdy") || "0px");   // the date rises with this scene's clock
       date.classList.remove("swap");
       fitDate();
@@ -1091,6 +1091,7 @@
     var dark = meta.charAt(i) === "1";
     root.classList.toggle("date-dark", dark);
     root.classList.toggle("date-light", !dark);
+    root.classList.toggle("pic-night", sp.k === 0);   // a night picture is up (Pine fog's clock turns to light glass, app.css)
   }
   function placeBlend(el, p, secs) {   // layer 2 at opacity p, getting there over secs seconds (0: at once)
     var l = el.querySelectorAll(".sbg2, .fg2, .fillb");

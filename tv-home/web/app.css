@@ -1987,7 +1987,7 @@ html:not(.kids-on) .kids { display: none; }
 
 
 
-/* Pine fog on a dark picture (night, dusk: html.date-light, set by app.js placeTone): the clock is light glass, not the dark digits made for the white mist */
-html.date-light:not(.clock-liquid):not(.has-video) .s-fog .gclock .fill { filter: brightness(2.3) saturate(0.9); opacity: 0.85; }
-html.date-light:not(.clock-liquid):not(.has-video) .s-fog .gclock .rim { color: rgba(255, 255, 255, 0.06); -webkit-text-stroke-color: rgba(255, 255, 255, 0.5); }
-html.date-light:not(.clock-liquid):not(.has-video) .s-fog .gclock .sheen { display: block; }
+/* Pine fog on a dark picture (a night picture: html.pic-night, set by app.js placeTone): the clock is light glass, not the dark digits made for the white mist */
+html.pic-night:not(.clock-liquid):not(.has-video) .s-fog .gclock .fill { filter: brightness(2.3) saturate(0.9); opacity: 0.85; }
+html.pic-night:not(.clock-liquid):not(.has-video) .s-fog .gclock .rim { color: rgba(255, 255, 255, 0.06); -webkit-text-stroke-color: rgba(255, 255, 255, 0.5); }
+html.pic-night:not(.clock-liquid):not(.has-video) .s-fog .gclock .sheen { display: block; }
