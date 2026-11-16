@@ -383,7 +383,7 @@
     if (window.I18N) window.I18N.set(ST.lang || HOME.language || window.I18N.device());
     if (CFG.weather) WXCFG = CFG.weather;
     var pl = ST.place;
-    if (pl && isFinite(pl.lat) && isFinite(pl.lon)) WXCFG = { lat: pl.lat, lon: pl.lon, place: pl.name || "", timezone: pl.timezone || "auto" };
+    if (pl && isFinite(pl.lat) && isFinite(pl.lon)) WXCFG = { lat: pl.lat, lon: pl.lon, place: [pl.name, pl.area].filter(Boolean).join(", "), timezone: pl.timezone || "auto" };
     WX_SHOW = ST.wx_show !== false;
     WX_F = (ST.wx_unit || HOME.wx_unit) === "f";   // Home settings, else home.wx_unit in config.json
     WX_EVERY = [15, 30, 60].indexOf(ST.wx_every) >= 0 ? ST.wx_every : 30;
@@ -468,7 +468,12 @@
   function movingTiles() {
     MOVING = LIGHTER ? false : typeof ST.moving_tiles === "boolean" ? ST.moving_tiles : typeof HOME.moving_tiles === "boolean" ? HOME.moving_tiles : GLASS !== "lite";
     document.documentElement.classList.toggle("still", !MOVING);
+    // Mac-style dock (Home settings, Look; home.dock "mac"): off unless chosen, held off by Lighter home
+    DOCK_MAC = !LIGHTER && (ST.dock || HOME.dock) === "mac";
+    document.documentElement.classList.toggle("dock-mac", DOCK_MAC);
+    if (typeof magnify === "function") magnify();
   }
+  var DOCK_MAC = false;
   // Lighter home: ask for the 640 px size of a Keep watching picture, not the 1440 px one (a card is about 500 px wide)
   function slim(u) { return LIGHTER && typeof u === "string" ? u.replace("/s1440/", "/s640/") : u; }
   function glassSetting() { var g = ST.glass || HOME.glass; return g === "on" || g === "lite" ? g : "off"; }
@@ -639,6 +644,21 @@
   function tempText(c) { return WX_F ? Math.round(c * 9 / 5 + 32) + "°F" : c + "°"; }
   function wxText(w) { var k = WMO_KEY[w.code]; return k ? t(k) : (w.text || ""); }
 
+  function weatherPlace() {
+    var place = String((WXCFG && WXCFG.place) || "").trim();
+    var L = window.I18N, country = L && L.country ? L.country() : "";
+    var parts = place.split(/\s*,\s*/);
+    if (country && parts.length > 1 && typeof Intl !== "undefined" && Intl.DisplayNames) {
+      var names = [
+        new Intl.DisplayNames(["en"], { type: "region" }).of(country),
+        new Intl.DisplayNames([L.locale()], { type: "region" }).of(country)
+      ];
+      var last = parts[parts.length - 1].toLowerCase();
+      if (names.some(function (name) { return name && name.toLowerCase() === last; })) parts.pop();
+    }
+    return parts.join(", ");
+  }
+
   function clock() {
     var d = new Date(), h = d.getHours(), m = d.getMinutes();
     var mm = (m < 10 ? "0" : "") + m;
@@ -646,17 +666,30 @@
     $("time").innerHTML = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
     var loc = window.I18N ? window.I18N.locale() : "en-AU";
     // the day's name, a comma, then the date: "Sâmbătă, 14 noiembrie" (the one formatter puts them together in each language's own way)
+    var lang = window.I18N ? window.I18N.lang() : "en";
     var day = d.toLocaleDateString(loc, { weekday: "long" }) + ", " + d.toLocaleDateString(loc, { day: "numeric", month: "long" });
     day = day.charAt(0).toUpperCase() + day.slice(1);   // "lunes 27 de octubre" starts a line on screen
-    var w = NIGHT && WX_SHOW && wxNow() && wxNow().temp != null ? wxNow() : null;
-    $("date").innerHTML = '<span class="dline">' + esc(day) + (w ? '<span class="wx">' + wxIcon(w) + esc(tempText(w.temp)) +
-      '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : "") + "</span>";
+    var wn = wxNow(), w = NIGHT && WX_SHOW && wn && wn.temp != null ? wn : null;
+    var place = w ? weatherPlace() : "";
+    var date = $("date");
+    if (lang === "ro" && (place || w)) {   // Romanian: the date on one line, the place, temperature and weather under it (upstream)
+      var weatherParts = [place, w && tempText(w.temp), w && wxText(w)].filter(Boolean);
+      date.classList.add("weather-lines");
+      date.innerHTML = '<span class="dline"><span class="date-label">' + esc(day) +
+        '</span><span class="wx">' + weatherParts.map(esc).join(" · ") + "</span></span>";
+    } else {
+      date.classList.remove("weather-lines");
+      date.innerHTML = '<span class="dline">' + esc(day) + (w ? '<span class="wx">' +
+        (place ? '<span class="wx-place">' + esc(place) + " · </span>" : "") + wxIcon(w) + esc(tempText(w.temp)) +
+        '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : "") + "</span>";
+    }
     var ic = $("idle-clock"), idate = $("idle-date"), iwx = $("idle-wx");
     if (ic) ic.innerHTML = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
     if (idate) idate.textContent = day;
     if (iwx) {
       var wIdle = WX_SHOW && wxNow() && wxNow().temp != null ? wxNow() : null;
-      iwx.textContent = wIdle ? (tempText(wIdle.temp) + " · " + wxText(wIdle)) : "";
+      var placeIdle = wIdle ? weatherPlace() : "";
+      iwx.textContent = wIdle ? ([placeIdle, tempText(wIdle.temp), wxText(wIdle)].filter(Boolean).join(" · ")) : "";
     }
     var iov = $("idle-ambient-overlay");
     if (iov) iov.classList.toggle("quiet-hours", isQuietHours(SMART_IDLE.quiet_hours));
@@ -3316,7 +3349,8 @@
     else if (iconUrl(it.package)) face = '<div class="face"><img src="' + esc(iconUrl(it.package)) + '" alt="" decoding="async" onerror="this.parentNode.className=\'face word\';this.parentNode.textContent=this.getAttribute(\'data-name\')" data-name="' + esc(it.name) + '"></div>';
     else face = '<div class="face word">' + esc(it.name) + "</div>";
     var cls = "tile app dock-ic" + (it.kind === "input" ? " input-ic ic-" + esc(it.icon || "hdmi") : "") + (lift && it.package === lift.pkg ? " lifted" : "");
-    return '<div class="' + cls + '">' + face + dotHTML(it) + '<div class="label">' + esc(it.name) + "</div></div>";
+    // the name sits in a span: with the Mac-style dock it is a small bubble above the icon (app.css)
+    return '<div class="' + cls + '">' + face + dotHTML(it) + '<div class="label"><span>' + esc(it.name) + "</span></div></div>";
   }
 
   function appHTML(it) {
@@ -3423,7 +3457,67 @@
   function peopleOn() { return peopleCount() >= 2 || solo(); }
   function toPeople() { zone = "people"; pi = whoIndex(); }
 
+  // ---------------- the Mac-style dock ----------------
+  // The focused app and its neighbours grow in a wave, measured off a real Mac dock (a little smaller
+  // for a TV): the focused one most, then 1, 2 and 3 apps away. The row slides so the dock stays
+  // centred, the tray grows the same on both sides, and a dock too wide for the screen shrinks as a
+  // whole, as a Mac's does, so the wave keeps its shape.
+  var MAG = [1.55, 1.45, 1.25, 1.05];
+  function magnify() {
+    var root = document.documentElement, grid = $("grid");
+    if (!grid) return;
+    gridEls.forEach(function (el) { if (el) el.style.transform = ""; });
+    var tray = function (d) {
+      grid.style.paddingLeft = grid.style.paddingRight = d ? "calc(1.75rem + " + d.toFixed(1) + "px)" : "";
+      grid.style.marginLeft = grid.style.marginRight = d ? (-d).toFixed(1) + "px" : "";   // the icons stay where they sit
+    };
+    tray(0);
+    if (!DOCK_MAC || !NIGHT || root.classList.contains("expanded")) return;
+    var fe = grid.querySelector(".app.focus, .app.lifted");
+    if (!fe) return;
+    var top = fe.offsetTop, row = gridEls.filter(function (el) { return el && el.offsetTop === top; });
+    var fi = row.indexOf(fe), w = fe.offsetWidth;
+    var sc = function (i) { var k = Math.abs(i - fi); return k < MAG.length ? MAG[k] : 1; };
+    var ex = function (i) { return w * (sc(i) - 1); };
+    var rtl = root.dir === "rtl";
+    var before = ex(fi) / 2, after = ex(fi) / 2;   // how far the first and last icons reach past where they sit
+    row.forEach(function (el, i) { if (i < fi) before += ex(i); else if (i > fi) after += ex(i); });
+    var shift = (before - after) / 2;   // the whole row slides so the dock stays centred
+    // measured from the icons, not the tray: the tray's own padding may still be on its way
+    var first = row[0], last = row[row.length - 1];
+    var pad = 1.75 * (parseFloat(getComputedStyle(root).fontSize) || 16);
+    var W = last.offsetLeft + last.offsetWidth - first.offsetLeft + 2 * pad;
+    var f = Math.min(1, window.innerWidth * 0.97 / (W + before + after));
+    var mid = (first.offsetLeft + last.offsetLeft + last.offsetWidth) / 2;
+    row.forEach(function (el, i) {
+      var x = 0;
+      if (i !== fi) {
+        var dir = i > fi ? 1 : -1;
+        x = ex(fi) / 2;
+        for (var j = fi + dir; j !== i; j += dir) x += ex(j);
+        x = (x + ex(i) / 2) * dir;
+      }
+      x = (x + shift) * (rtl ? -1 : 1);
+      var c = el.offsetLeft + el.offsetWidth / 2 - mid;   // where it sits, from the dock's middle
+      x = f * (c + x) - c;
+      el.style.transform = "translateX(" + x.toFixed(1) + "px) scale(" + (f * sc(i)).toFixed(3) + ")";
+    });
+    tray((f * (W + before + after) - W) / 2);
+  }
+  // OK on a dock app: pressed in while held, one hop as it opens (app.css)
+  function pressTile(on) {
+    Array.prototype.forEach.call($("grid").querySelectorAll(".app.pressed"), function (el) { el.classList.remove("pressed"); });
+    if (on && DOCK_MAC && NIGHT && zone === "grid" && gridEls[g]) gridEls[g].classList.add("pressed");
+  }
+  function hopTile() {
+    var el = DOCK_MAC && NIGHT && zone === "grid" && gridEls[g];
+    if (!el || !el.classList.contains("app")) return;
+    el.classList.remove("hop"); void el.offsetWidth; el.classList.add("hop");
+    setTimeout(function () { el.classList.remove("hop"); }, 560);
+  }
+
   function paintFocus() {
+    if (DOCK_MAC) setTimeout(magnify, 0);   // after this paint has put the focus class where it belongs
     saveFocusSoon();
     // the arrow under the dock (panel.js): there is a page below while the home itself is in front
     if (window.ControlPanel) window.ControlPanel.hint(!expanded && ["grid", "shelf", "people", "quick", "np"].indexOf(zone) >= 0);
@@ -4211,8 +4305,8 @@
     if (go) run(); else geoTimer = setTimeout(run, 500);
   }
   function choosePlace(p) {
-    ST.place = { name: p.name, lat: p.lat, lon: p.lon, timezone: p.timezone };
-    WXCFG = { lat: p.lat, lon: p.lon, place: p.name, timezone: p.timezone };
+    ST.place = { name: p.name, area: p.area || "", lat: p.lat, lon: p.lon, timezone: p.timezone };
+    WXCFG = { lat: p.lat, lon: p.lon, place: [p.name, p.area].filter(Boolean).join(", "), timezone: p.timezone };
     saveSettings();
     SET.msg = t("loc_set", { place: p.name });
     data.weather = null;
@@ -4362,6 +4456,11 @@
     rows.push({ kind: "toggle", key: "moving-tiles", label: t("moving_tiles"), value: MOVING ? t("on") : t("off"), act: function () {
       if (LIGHTER) return;   // held still while Lighter home is on
       MOVING = !MOVING; ST.moving_tiles = MOVING; saveSettings(); movingTiles();
+    } });
+    // the Mac-style dock: the focused app and its neighbours grow in a wave, its name in a bubble above it
+    if (NIGHT) rows.push({ kind: "toggle", key: "dock-mac", label: t("dock_mac"), value: DOCK_MAC ? t("on") : t("off"), act: function () {
+      if (LIGHTER) return;   // held off while Lighter home is on
+      ST.dock = DOCK_MAC ? "classic" : "mac"; saveSettings(); movingTiles();
     } });
     // a slow box (#58): no blur, no soft shadows, a still photo and smaller pictures, all in one switch
     // the whole Keep watching row, heading and all (home.keep_watching): off closes the gap and stops fetching it
@@ -5210,7 +5309,7 @@
   // Works for remotes that repeat the key while it is held and for ones that only send the press
   // and, later, the release. One press is one action: a pick-up never also opens the app.
   var okDown = false, okHeld = false, okTimer = null;
-  function okReset() { okDown = false; okHeld = false; clearTimeout(okTimer); }
+  function okReset() { okDown = false; okHeld = false; clearTimeout(okTimer); pressTile(false); }
 
   // A short navigation click on every arrow and OK, like the TV's own launcher.
   var AC = null, SOUND = true;
@@ -5464,7 +5563,8 @@
       if (e.repeat || okDown) return;   // a held key repeating: the timer is already running
       okDown = true; okHeld = false;
       blip(0, 0);
-      okTimer = setTimeout(function () { okHeld = true; if (!hold()) activate(); ensureFocus(); resetIdlePhoto(); }, HOLD_MS);
+      pressTile(true);
+      okTimer = setTimeout(function () { okHeld = true; pressTile(false); if (!hold()) activate(); ensureFocus(); resetIdlePhoto(); }, HOLD_MS);
       return;
     }
     var arrow = arrowOf(e);
@@ -5513,7 +5613,7 @@
     if (!okDown) return;
     var held = okHeld;
     okReset();
-    if (!held) activate();
+    if (!held) { hopTile(); activate(); }
     ensureFocus();
     resetIdlePhoto();
   });
