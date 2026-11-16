@@ -140,9 +140,10 @@ body {
 
 /* the date line takes the colour that reads on the picture behind it (app.js sets date-dark or date-light for a place's picture) */
 html.date-dark .date { color: #16201d !important; text-shadow: none !important; }
-html.date-dark .date .wx { color: rgba(22, 32, 29, 0.72) !important; }
+/* the weather line takes the date's colour (the date is the one element that stays and fades; the weather line is built again at every clock tick, so a colour of its own
+   would start from the end colour every time, and the two lines changed colour at different moments) */
+html.date-dark .date .wx, html.date-light .date .wx { color: inherit !important; opacity: 0.78; }
 html.date-light .date { color: rgba(255, 255, 255, 0.96) !important; text-shadow: 0 0.0625rem 0.75rem rgba(0, 0, 0, 0.4) !important; }
-html.date-light .date .wx { color: rgba(255, 255, 255, 0.8) !important; }
 
 /* ---------- clock, and the focused show's title ---------- */
 .top {

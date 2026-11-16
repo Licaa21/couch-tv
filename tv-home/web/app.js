@@ -656,7 +656,7 @@
       var last = parts[parts.length - 1].toLowerCase();
       if (names.some(function (name) { return name && name.toLowerCase() === last; })) parts.pop();
     }
-    return parts.join(", ");
+    return parts[0];   // the city only: "Craiova, Municipiul Craiova, Județul Dolj" is far too long for the date line
   }
 
   function clock() {
