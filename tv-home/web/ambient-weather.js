@@ -75,7 +75,7 @@
   var maskImg = null, maskUrl = "";
   var dist = 0.7, sheetOnly = false, boltGround = [0, 0], boltTop = [0, 0], boltHidden = false;
   function buildBolt() {
-    var x0 = randomRange(W * 0.28, W * 0.72), y0 = randomRange(H * 0.05, H * 0.18), i;
+    var x0 = randomRange(W * 0.28, W * 0.72), y0 = randomRange(H * 0.04, H * 0.14), i;
     dist = randomRange(0.5, 0.95);
     sheetOnly = Math.random() < 0.28;
     boltHidden = !!(maskImg && maskImg.complete && maskImg.naturalWidth);
@@ -87,6 +87,12 @@
     boltForks = [];
     if (!sheetOnly) {
       grow(x0, y0, x1, y1, 64 * dist, boltMain);
+      // inside the cloud the bolt starts from two thin branches that spread downward (not a flat line across the top)
+      for (i = 0; i < 2; i++) {
+        var r = [[x0, y0]];
+        grow(x0, y0, x0 + (i ? 1 : -1) * randomRange(30, 80) * dist, y0 + randomRange(28, 70) * dist, 16 * dist, r);
+        boltForks.push(r);
+      }
       var forks = 1 + Math.floor(Math.random() * 3);
       for (i = 0; i < forks; i++) {   // short branches off the upper part, going down and to the side, thinning out
         var at = boltMain[2 + Math.floor(Math.random() * Math.max(1, boltMain.length * 0.45 - 2))], dir = Math.random() < 0.5 ? -1 : 1, f = [[at[0], at[1]]];
@@ -129,6 +135,7 @@
     var n = boltMain.length, k;
     for (k = 1; k < n; k++) {
       var t = k / (n - 1), fade = boltHidden ? 1 : Math.max(0, Math.min(1, (1 - t) / 0.4));
+      fade *= Math.min(1, 0.25 + t / 0.2);   // and it comes out of the cloud: faint at the very top, whole a little way down
       if (fade <= 0.02) continue;
       ctx.beginPath();
       ctx.moveTo(boltMain[k - 1][0], boltMain[k - 1][1]); ctx.lineTo(boltMain[k][0], boltMain[k][1]);
@@ -139,6 +146,7 @@
     var a = lv * (0.55 + 0.45 * dist);
     // the cloud lights up from within, round the top of the strike (never the whole screen), and the ridge behind the scenery
     glow(boltTop[0], boltTop[1] + 40, W * (sheetOnly ? 0.55 : 0.4), H * 0.2, (sheetOnly ? 0.46 : 0.5) * a);
+    if (!sheetOnly) glow(boltTop[0], boltTop[1], 150 * dist + 60, 55 * dist + 20, 0.75 * a);   // a bright core in the cloud where the bolt begins
     if (!sheetOnly) {
       if (boltHidden) glow(boltGround[0], groundFn(boltGround[0] / W) * H, 260 * dist + 80, 40 * dist + 14, 0.5 * a);
       ctx.lineJoin = "round";
