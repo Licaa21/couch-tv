@@ -648,14 +648,14 @@
     // the day's name, a comma, then the date: "Sâmbătă, 14 noiembrie" (the one formatter puts them together in each language's own way)
     var day = d.toLocaleDateString(loc, { weekday: "long" }) + ", " + d.toLocaleDateString(loc, { day: "numeric", month: "long" });
     day = day.charAt(0).toUpperCase() + day.slice(1);   // "lunes 27 de octubre" starts a line on screen
-    var w = NIGHT && WX_SHOW && data.weather && data.weather.temp != null ? data.weather : null;
+    var w = NIGHT && WX_SHOW && wxNow() && wxNow().temp != null ? wxNow() : null;
     $("date").innerHTML = '<span class="dline">' + esc(day) + (w ? '<span class="wx">' + wxIcon(w) + esc(tempText(w.temp)) +
       '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : "") + "</span>";
     var ic = $("idle-clock"), idate = $("idle-date"), iwx = $("idle-wx");
     if (ic) ic.innerHTML = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
     if (idate) idate.textContent = day;
     if (iwx) {
-      var wIdle = WX_SHOW && data.weather && data.weather.temp != null ? data.weather : null;
+      var wIdle = WX_SHOW && wxNow() && wxNow().temp != null ? wxNow() : null;
       iwx.textContent = wIdle ? (tempText(wIdle.temp) + " · " + wxText(wIdle)) : "";
     }
     var iov = $("idle-ambient-overlay");
@@ -1015,6 +1015,15 @@
   }
 
   // What the sky is doing, from the weather service code: clear, mostly clear, partly cloudy, cloudy, fog, drizzle, rain, snow or storm.
+  // The weather the home shows: the real one, or one chosen for testing (Home settings, Testing), or, with "Follow the sun and weather" off, the one
+  // the chosen picture set stands for (so the rain, snow and storm drawn over the picture always fit it).
+  var TEST_WX = 0, FIXED_CODE = { clear: 0, partly: 2, cloudy: 3, dark: 63, snow: 73 };
+  function wxNow() {
+    var real = data.weather, t = real && real.temp != null ? real.temp : 15;
+    if (TEST_WX) return { code: TEST_WX, temp: t };
+    if (!SUN_SYNC && SCENES.some(function (s) { return s.place; }) && FIXED_CODE[FIXED_WX] != null) return { code: FIXED_CODE[FIXED_WX], temp: t };
+    return real;
+  }
   function weatherKind(code) {
     if (code == null || !isFinite(code)) return "";
     if (code === 0) return "clear";
@@ -1092,8 +1101,9 @@
   // What the sky asks for now: a picture set and a pair of times with the share of the second.
   function placeTarget() {
     var P = window.Places;
-    if (!SUN_SYNC) return { wx: FIXED_WX, pair: { a: P.TIMES.indexOf(FIXED_TIME), b: -1, p: 0 } };
-    return { wx: P.weatherSet(weatherKind(data.weather && data.weather.code)), pair: P.pairFor(currentPhase(), SMOOTH_TIME || !!DAY_PREV)   /* the Day preview always drifts: in steps it would jump, a day passes in a minute */ };
+    if (!SUN_SYNC && !TEST_WX) return { wx: FIXED_WX, pair: { a: P.TIMES.indexOf(FIXED_TIME), b: -1, p: 0 } };
+    if (!SUN_SYNC) return { wx: P.weatherSet(weatherKind(TEST_WX)), pair: { a: P.TIMES.indexOf(FIXED_TIME), b: -1, p: 0 } };
+    return { wx: P.weatherSet(weatherKind(wxNow() && wxNow().code)), pair: P.pairFor(currentPhase(), SMOOTH_TIME || !!DAY_PREV)   /* the Day preview always drifts: in steps it would jump, a day passes in a minute */ };
   }
 
   function placeKey(s, sp) { return window.Places.file(s.id, sp.wx, window.Places.TIMES[sp.k]); }
@@ -1257,7 +1267,7 @@
   // The weather changed (or a setting did): first settle the drift on the nearest picture (8 s), then dissolve the new picture in over
   // WX_DISSOLVE seconds, then go on drifting.
   function placeDissolve(s, el, spec) {
-    var L = s.L, quick = L.guess && !!data.weather, secs = DAY_PREV ? 2 : quick ? 3 : WX_DISSOLVE, fold = DAY_PREV ? 1 : 8;   // the first weather after the start comes in quickly: it is a correction, not a change
+    var L = s.L, quick = L.guess && !!data.weather, secs = DAY_PREV ? 2 : (quick || TEST_WX) ? 3 : WX_DISSOLVE, fold = DAY_PREV || TEST_WX ? 1 : 8;   // the first weather after the start comes in quickly: it is a correction, not a change
     L.guess = false;
     if (L.g) { L.pB = placeNow(L); L.g = null; clearTimeout(L.gt); placeBlend(el, L.pB, 0); }   // a long fade is stopped where it is
     L.busy = true;
@@ -1392,9 +1402,19 @@
     rows.push({ kind: "cycle", key: "wx-dissolve", label: t("wx_dissolve"), sub: t("wx_dissolve_sub"), value: t("n_secs", { n: WX_DISSOLVE }), act: function () {
       WX_DISSOLVE = cycleOf(WX_DISSOLVE_STEPS, WX_DISSOLVE); ST.wx_dissolve = WX_DISSOLVE; saveSettings();
     } });
+  }
+  function testWeather(code) { TEST_WX = code; clock(); updateAmbientWeather(); sceneTick(true); }
+  // Home settings, Testing: the day preview and the weathers, to see them without waiting (none of it is saved: off again after a restart)
+  function testRows(rows) {
+    rows.push(head(t("test_head")));
     rows.push({ kind: "cycle", key: "day-preview", label: t("day_preview"), sub: t("day_preview_sub"), value: DAY_PREV ? t("day_preview_n", { n: DAY_PREV / 60 }) : t("off"), act: function () {
-      setPreview(cycleOf(PREVIEW_STEPS, DAY_PREV));   // not saved: off again after a restart
+      setPreview(cycleOf(PREVIEW_STEPS, DAY_PREV));
     } });
+    [["rain", 63], ["storm", 95], ["snow", 73]].forEach(function (w) {
+      rows.push({ kind: "toggle", key: "test-" + w[0], label: t("test_" + w[0]), sub: t("test_wx_sub"), value: TEST_WX === w[1] ? t("on") : t("off"), act: function () {
+        testWeather(TEST_WX === w[1] ? 0 : w[1]);   // the picture set follows: snow shows the snowy pictures, rain and storm the dark ones
+      } });
+    });
   }
 
   function getSunPos() {
@@ -1421,7 +1441,7 @@
   function updateAmbientWeather() {
     if (!window.AmbientWeather) return;
     var pos = getSunPos();
-    window.AmbientWeather.setWeather(WX_SHOW ? data.weather : null, pos);
+    window.AmbientWeather.setWeather(WX_SHOW ? wxNow() : null, pos);
   }
 
   // The bridge's reading for the place in config.json, or straight from Open-Meteo with no bridge
@@ -1443,7 +1463,8 @@
   var WMO_KEY = { 0: "wx_clear", 1: "wx_mostly_clear", 2: "wx_partly", 3: "wx_cloudy", 45: "wx_fog", 48: "wx_fog",
     51: "wx_drizzle", 53: "wx_drizzle", 55: "wx_drizzle", 56: "wx_drizzle", 57: "wx_drizzle", 61: "wx_light_rain",
     63: "wx_rain", 65: "wx_heavy_rain", 66: "wx_rain", 67: "wx_rain", 80: "wx_showers", 81: "wx_showers",
-    82: "wx_heavy_showers", 95: "wx_storms", 96: "wx_storms", 99: "wx_storms" };
+    82: "wx_heavy_showers", 95: "wx_storms", 96: "wx_storms", 99: "wx_storms",
+    71: "wx_snow", 73: "wx_snow", 75: "wx_snow", 77: "wx_snow", 85: "wx_snow", 86: "wx_snow" };
   function weatherDirect() {
     var url = "https://api.open-meteo.com/v1/forecast?latitude=" + WXCFG.lat + "&longitude=" + WXCFG.lon +
       "&current=temperature_2m,weather_code,is_day&timezone=" + encodeURIComponent(WXCFG.timezone || "auto") + "&forecast_days=1";
@@ -4192,6 +4213,7 @@
         act: function () { toggleScene(id); }, move: function (d) { moveScene(id, d); } });
     });
     placeRows(rows);
+    testRows(rows);
     rows.push({ kind: "cycle", key: "clock", label: t("clock"), value: CLOCK24 ? t("clock_24") : t("clock_12"), act: function () {
       CLOCK24 = !CLOCK24; ST.clock = CLOCK24 ? "24h" : "12h"; saveSettings(); glassShown = ""; clock();
     } });
@@ -5612,6 +5634,8 @@
     },
     preview: function (secs) { setPreview(secs); },
     tick: function () { sceneTick(true); },
+    testWeather: function (code) { testWeather(code); },
+    testRows: function () { var r = []; testRows(r); return r.map(function (x) { return x.label + ": " + (x.value || ""); }); },
     weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: WXCFG.place, timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },
     screenOff: function () { toggleScreenOff(true); },
     wakeScreen: function () { toggleScreenOff(false); },
