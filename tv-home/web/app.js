@@ -944,7 +944,7 @@
         root.style.setProperty("--my-size", s.size * 100 + "vh");
       }
       root.className = root.className.replace(/\b(scene|mine)-\w+/g, "").replace(/\s+/g, " ").trim() + cls;
-      if (s.place) placeTone(s); else root.classList.remove("date-dark", "date-light", "ck-deep", "ck-light");
+      if (s.place) placeTone(s); else root.classList.remove("date-dark", "date-light");
       root.style.setProperty("--cdy-r", sceneEls[i].style.getPropertyValue("--cdy") || "0px");   // the date rises with this scene's clock
       date.classList.remove("swap");
       fitDate();
@@ -1106,23 +1106,21 @@
     placeBlend(el, from, 0); void el.offsetWidth; placeBlend(el, 1, L.g.dur);
     var nx = placeUrl(window.Places.file(s.id, L.B.wx, window.Places.TIMES[(L.B.k + 1) % 6]), ".jpg");   // the one after: fetched while this one fades
     if (L.pre !== nx) { L.pre = nx; (new Image()).src = nx; }
-    if (from < 0.5) setTimeout(function () { if (s.L === L) placeTone(s); }, (0.5 - from) / (1 - from) * L.g.dur * 1000);   // the date changes colour half way
     placeRedraw(s, el);
     clearTimeout(L.gt);   // the hand-over to the next picture is on time, not at the next tick
     L.gt = setTimeout(function () { if (s.L === L && L.g) placeUpdate(SCENES.indexOf(s)); }, L.g.dur * 1000 + 130);
   }
   // The date line is dark on a bright sky and light on a dark one (places-meta.js, made by make-place-scenes.py: one 0 or 1 for each of the 30 pictures)
-  function placeTone(s) {
+  // The colour goes from one tone to the other over the same time as the picture fades (secs; the CSS variable --tone-s), never in a jump.
+  function placeTone(s, secs, p) {
     var meta = window.PLACE_DATE && window.PLACE_DATE[s.id], L = s.L;
     if (!meta || !L || SCENES[scene] !== s) return;
-    var sp = L.B && placeNow(L) >= 0.5 ? L.B : L.A, P = window.Places, i = P.WEATHERS.indexOf(sp.wx) * 6 + sp.k, root = document.documentElement;
+    if (p == null) p = L.B ? placeNow(L) : 0;
+    var sp = L.B && p >= 0.5 ? L.B : L.A, P = window.Places, i = P.WEATHERS.indexOf(sp.wx) * 6 + sp.k, root = document.documentElement;
     var dark = meta.charAt(i) === "1";
+    root.style.setProperty("--tone-s", Math.max(0.01, secs || 0) + "s");
     root.classList.toggle("date-dark", dark);
     root.classList.toggle("date-light", !dark);
-    // the clock's glass: deep on a bright sky, light on a dark one (the brightness behind each picture's clock: places-meta.js PLACE_LUM)
-    var lum = window.PLACE_LUM && window.PLACE_LUM[s.id] ? window.PLACE_LUM[s.id][i] : 128;
-    root.classList.toggle("ck-deep", lum >= 120);
-    root.classList.toggle("ck-light", lum < 100);
   }
   // The two picture layers take turns: whichever comes first in the page is the bottom one (always shown), the other fades in over it. When the
   // fade is done, the top one is moved below the other: no picture is loaded or decoded at the hand-over (on the TV that was the cut at the end).
@@ -1138,17 +1136,41 @@
     }
     var k = sceneEls.indexOf(el);
     if (k >= 0 && SCENES[k] && SCENES[k].place) {
-      if (secs > 8 && p > 0.5) setTimeout(function () { placeTone(SCENES[k]); }, secs * 500);   // a slow dissolve: the date changes half way
-      else placeTone(SCENES[k]);
+      placeTone(SCENES[k], secs, p);
     }
   }
   // the glass clock's second fill: the picture over this one, at the same place behind the digits
+  // The shade of a clock fill follows the brightness behind its picture's clock (places-meta.js PLACE_LUM: deep on a bright sky so it reads, light on a
+  // dark one). It is set on each fill from its own picture, and the second fill fades in over the first with the picture: the colour changes with the
+  // fade, gradually, with no class switch and no transition of its own.
+  function placeLum(s, key) {
+    var P = window.Places, m = /([a-z]+)-([a-z]+)$/.exec(key || ""), L = window.PLACE_LUM && window.PLACE_LUM[s.id];
+    if (!m || !L) return 128;
+    var v = L[P.WEATHERS.indexOf(m[1]) * 6 + P.TIMES.indexOf(m[2])];
+    return v == null ? 128 : v;
+  }
+  function placeShade(el, id, lum) {
+    if (CLOCK_LIQUID || document.documentElement.classList.contains("has-video")) { el.style.filter = ""; return; }
+    // (the opacity stays 1 on both fills: the second one fades from 0 to 1 over the first, and at the hand-over the two must look the same)
+    el.style.opacity = "1";
+    var clamp = function (x) { return Math.max(0, Math.min(1, x)); }, t, u;
+    if (id === "fog") {   // dark digits for its white mist; light glass on the dark pictures
+      u = clamp((100 - lum) / 40);
+      el.style.filter = "brightness(" + (0.46 * Math.pow(5, u)).toFixed(3) + ") saturate(" + (0.8 + 0.1 * u).toFixed(2) + ") contrast(" + (1.1 - 0.1 * u).toFixed(2) + ")";
+    } else {
+      t = clamp((lum - 100) / 50);
+      var night = id === "night";
+      el.style.filter = "brightness(" + ((night ? 1.15 : 1) * (1 - 0.62 * t)).toFixed(3) + ") saturate(" + ((night ? 1.2 : 1) + 0.3 * t).toFixed(2) + ")";
+    }
+  }
   function placeFillB(c, f, s) {
+    if (!c.classList.contains("under")) placeShade(f, s.id, placeLum(s, s.curA));
     var fb = c.querySelector(".fill.fillb"), f2 = fb;   // the second fill is a fill of its own with its own opacity (no wrapper: a wrapper's opacity over a clipped-text fill is not drawn right on every TV)
     if (!f2) return;
     f2.style.backgroundImage = s.curB && s.curA ? f.style.backgroundImage.split(s.curA).join(s.curB) : "none";
     f2.style.backgroundSize = f.style.backgroundSize;
     f2.style.backgroundPosition = f.style.backgroundPosition;
+    if (!c.classList.contains("under") && s.curB) placeShade(f2, s.id, placeLum(s, s.curB));
     var L = s.L, pb = L && s.curB ? placeNow(L) : 0;
     if (L && L.g) fb.style.transition = "none";
     fb.style.opacity = pb;
