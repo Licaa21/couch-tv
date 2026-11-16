@@ -73,9 +73,10 @@
   // the ridge lit behind. How far away it is (dist, 0.5 to 1) sets how thick and bright it is. Sometimes there is only sheet lightning (no bolt).
   var groundFn = function () { return 0.58; };
   var maskImg = null, maskUrl = "";
+  var zones = [[0.3, 0.7]];   // where a bolt may stand, as shares of the width: only where it looks right in the picture on show (app.js sets them per scene)
   var dist = 0.7, sheetOnly = false, boltGround = [0, 0], boltTop = [0, 0], boltHidden = false;
   function buildBolt() {
-    var x0 = randomRange(W * 0.28, W * 0.72), y0 = randomRange(H * 0.04, H * 0.14), i;
+    var zn = zones[Math.floor(Math.random() * zones.length)], x0 = randomRange(W * zn[0], W * zn[1]), y0 = randomRange(H * 0.04, H * 0.14), i;
     dist = randomRange(0.5, 0.95);
     sheetOnly = Math.random() < 0.28;
     boltHidden = !!(maskImg && maskImg.complete && maskImg.naturalWidth);
@@ -360,8 +361,9 @@
 
     // where the ground is in the picture on show: fn(x as a share of the width) -> y as a share of the height (the lightning ends there; the rain and
     // snow fade out below it: --wx-ground on the layers, app.css)
-    setGround: function (fn, mid, mask) {
+    setGround: function (fn, mid, mask, zn) {
       if (typeof fn === "function") groundFn = fn;
+      if (zn && zn.length) zones = zn;
       if (mask !== maskUrl) {   // the outline of the scenery of the scene on show (backgrounds/places/<id>/mask.png), or none
         maskUrl = mask || ""; maskImg = null;
         if (maskUrl && root.Image) { maskImg = new root.Image(); maskImg.src = maskUrl; }

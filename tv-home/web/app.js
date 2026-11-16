@@ -1488,7 +1488,9 @@
     var at = function (xf) { return prof ? clampG(prof[Math.max(0, Math.min(prof.length - 1, Math.floor(xf * prof.length)))]) : clampG(sc && sc.water ? sc.water : 0.58); };
     var mid = 0, n = 0, i;
     for (i = 0.15; i <= 0.85; i += 0.1) { mid += at(i); n++; }
-    a.setGround(at, (mid / n).toFixed(3), sc && sc.place && sc.fg ? "backgrounds/places/" + sc.id + "/mask.png" : "");
+    // where a bolt looks right in each picture: over the distant ridges and peaks, away from the near trees and the clock
+    var ZONES = { golden: [[0.05, 0.3], [0.62, 0.95]], dawn: [[0.05, 0.32], [0.62, 0.95]], fog: [[0.5, 0.95]], night: [[0.4, 0.6]], water: [[0.4, 0.6]] };
+    a.setGround(at, (mid / n).toFixed(3), sc && sc.place && sc.fg ? "backgrounds/places/" + sc.id + "/mask.png" : "", sc && ZONES[sc.id]);
   }
   function updateAmbientWeather() {
     if (!window.AmbientWeather) return;
