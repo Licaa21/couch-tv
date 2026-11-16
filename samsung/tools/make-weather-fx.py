@@ -67,8 +67,8 @@ def rain_far():
 
 def rain_near():
     """Near rain: a few long, wide, out of focus streaks (blurred, as a drop close to the eye is)."""
-    big = tile(lambda d: streaks(d, 64, (180, 340), (5.0, 9.0), 0.34, 0.14, (225, 238, 255)))
-    blurred(big, 2.6).save(os.path.join(OUT, "rain-near.png"), optimize=True)
+    big = tile(lambda d: streaks(d, 30, (150, 280), (3.0, 5.2), 0.24, 0.14, (225, 238, 255)))
+    blurred(big, 1.8).save(os.path.join(OUT, "rain-near.png"), optimize=True)
 
 
 def flakes(img, n, rad, alpha, blur):
@@ -77,25 +77,27 @@ def flakes(img, n, rad, alpha, blur):
         x, y, r = rng.uniform(0, W), rng.uniform(0, H), rng.uniform(*rad)
         a = int(alpha * rng.uniform(0.7, 1.0) * 255)
         for px, py in wrapped(x, y, r + 8):
+            q = r * 1.35   # a faint grey-blue edge under the white, so a flake still shows against a white sky
+            d.ellipse([px - q, py - q, px + q, py + q], fill=(150, 168, 196, int(a * 0.2)))
             d.ellipse([px - r, py - r, px + r, py + r], fill=(247, 251, 255, a))
 
 
 def snow_far():
     """Far and middle snow: many tiny crisp flakes, and some medium ones with a soft edge."""
     a = Image.new("RGBA", (W, H), (240, 246, 255, 0))
-    flakes(a, 640, (0.9, 1.7), 0.8, 0)
+    flakes(a, 860, (0.9, 1.8), 0.85, 0)
     b = Image.new("RGBA", (W, H), (240, 246, 255, 0))
     flakes(b, 170, (2.6, 4.6), 0.95, 0)
     Image.alpha_composite(a, blurred(b, 0.9)).save(os.path.join(OUT, "snow-far.png"), optimize=True)
 
 
 def snow_near():
-    """Near snow: big soft flakes, out of focus, as bokeh; and a few huge ones very close to the eye."""
+    """Near snow: soft flakes of middling size, and a few bigger, out of focus ones: close, but not in your face."""
     a = Image.new("RGBA", (W, H), (240, 246, 255, 0))
-    flakes(a, 46, (9, 17), 0.72, 0)
+    flakes(a, 70, (4.5, 9), 0.8, 0)
     c = Image.new("RGBA", (W, H), (240, 246, 255, 0))
-    flakes(c, 7, (34, 58), 0.4, 0)
-    Image.alpha_composite(blurred(a, 3.6), blurred(c, 12)).save(os.path.join(OUT, "snow-near.png"), optimize=True)
+    flakes(c, 16, (11, 17), 0.42, 0)
+    Image.alpha_composite(blurred(a, 1.7), blurred(c, 4.5)).save(os.path.join(OUT, "snow-near.png"), optimize=True)
 
 
 def fog(name):

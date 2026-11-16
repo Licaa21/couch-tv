@@ -107,6 +107,10 @@ body {
 .wx-layers { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; pointer-events: none; z-index: 0; display: none;
   perspective: 1100px; perspective-origin: 50% 30%; }
 .wx-layers.on { display: block; }
+/* Rain and snow fall through the air and are gone before the bottom of the screen: they thin out below the ground line of the picture
+   (--wx-ground, set by ambient-weather.js setGround), as if they landed in the distance. Not for fog, which is a haze over everything. */
+.wx-layers:not(.wx-fog) { -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(var(--wx-ground, 0.56) * 100% + 6%), rgba(0, 0, 0, 0) calc(var(--wx-ground, 0.56) * 100% + 36%));
+  mask-image: linear-gradient(to bottom, #000 0%, #000 calc(var(--wx-ground, 0.56) * 100% + 6%), rgba(0, 0, 0, 0) calc(var(--wx-ground, 0.56) * 100% + 36%)); }
 /* The layers stand on a plane tilted away from the eye (the wrap): perspective makes the streaks and flakes smaller, finer and slower toward the
    top, nearer and bigger toward the bottom: depth from one static transform, which costs the graphics chip nothing extra. Each layer sways on its
    own (wx-sw: the wind, different for the far and the near one) and falls on its own (wx-l). */

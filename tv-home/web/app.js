@@ -950,6 +950,7 @@
       fitDate();
     }, 600);
     sceneEls[i].style.zIndex = String(++sceneZ);   // the new scene is above the old one
+    ambientGround();   // the lightning ends on this scene's ground, the rain and snow fade out below it
     sceneEls[i].classList.add("on");
     if (prev !== i) {
       // A dissolve: the old scene stays fully drawn while the new one fades in over it, and goes when the new one is whole (two scenes both fading
@@ -1479,8 +1480,19 @@
     updateAmbientWeather();
   }
 
+  // Where the ground is in the scene on show (its scenery's top edge, from FG_TOP), for the lightning to end on and the rain and snow to fade out below
+  function ambientGround() {
+    var a = window.AmbientWeather;
+    if (!a || !a.setGround) return;
+    var sc = SCENES[scene], prof = sc && typeof FG_TOP !== "undefined" && FG_TOP[sc.id], clampG = function (v) { return Math.max(0.46, Math.min(0.64, v)); };
+    var at = function (xf) { return prof ? clampG(prof[Math.max(0, Math.min(prof.length - 1, Math.floor(xf * prof.length)))]) : clampG(sc && sc.water ? sc.water : 0.58); };
+    var mid = 0, n = 0, i;
+    for (i = 0.15; i <= 0.85; i += 0.1) { mid += at(i); n++; }
+    a.setGround(at, (mid / n).toFixed(3));
+  }
   function updateAmbientWeather() {
     if (!window.AmbientWeather) return;
+    ambientGround();
     var pos = getSunPos();
     window.AmbientWeather.setWeather(WX_SHOW ? wxNow() : null, pos);
   }

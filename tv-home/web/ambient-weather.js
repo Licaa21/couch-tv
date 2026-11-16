@@ -67,16 +67,33 @@
     grow(x1, y1, mx, my, off / 2, out);
     grow(mx, my, x2, y2, off / 2, out);
   }
+  // The strike stands in the distance: it comes out of the cloud base, near the middle of the screen where the clock is, and ends ON the ground line of
+  // the picture (groundFn: where the scenery begins at that x), small and thin, with the sky glowing round its top and a glow where it lands. How far
+  // away it is (dist, 0.5 to 1) sets how thick and bright it is. Sometimes there is only sheet lightning: the cloud lights up with no bolt in it.
+  var groundFn = function () { return 0.58; };
+  var dist = 0.7, sheetOnly = false, boltGround = [0, 0], boltTop = [0, 0];
   function buildBolt() {
-    var x0 = randomRange(W * 0.15, W * 0.85), x1 = x0 + randomRange(-160, 160), y1 = randomRange(H * 0.5, H * 0.72), i;
-    boltMain = [[x0, -10]];
-    grow(x0, -10, x1, y1, 110, boltMain);
+    var x0 = randomRange(W * 0.28, W * 0.72), y0 = randomRange(H * 0.05, H * 0.2), i;
+    dist = randomRange(0.5, 0.95);
+    sheetOnly = Math.random() < 0.28;
+    var g = groundFn(x0 / W), x1 = x0 + randomRange(-110, 110), y1 = (groundFn(x1 / W) + randomRange(0.0, 0.05)) * H;
+    boltTop = [x0, y0]; boltGround = [x1, y1];
+    boltMain = [[x0, y0]];
     boltForks = [];
-    var forks = 2 + Math.floor(Math.random() * 3);
-    for (i = 0; i < forks; i++) {
-      var at = boltMain[4 + Math.floor(Math.random() * Math.max(1, boltMain.length - 10))], dir = Math.random() < 0.5 ? -1 : 1, f = [[at[0], at[1]]];
-      grow(at[0], at[1], at[0] + dir * randomRange(90, 260), at[1] + randomRange(140, 300), 56, f);
-      boltForks.push(f);
+    if (!sheetOnly) {
+      grow(x0, y0, x1, y1, 70 * dist, boltMain);
+      var forks = 1 + Math.floor(Math.random() * 3);
+      for (i = 0; i < forks; i++) {   // short branches off the upper part, going down and to the side, thinning out
+        var at = boltMain[2 + Math.floor(Math.random() * Math.max(1, boltMain.length * 0.5 - 2))], dir = Math.random() < 0.5 ? -1 : 1, f = [[at[0], at[1]]];
+        grow(at[0], at[1], at[0] + dir * randomRange(40, 120) * dist, at[1] + randomRange(60, 150) * dist, 26 * dist, f);
+        boltForks.push(f);
+      }
+      // where it reaches the ground it splits into a few short, low branches
+      for (i = 0; i < 2; i++) {
+        var f2 = [[x1, y1]];
+        grow(x1, y1, x1 + (i ? 1 : -1) * randomRange(18, 60) * dist, y1 + randomRange(4, 22) * dist, 10 * dist, f2);
+        boltForks.push(f2);
+      }
     }
     boltX = x0;
   }
@@ -87,29 +104,43 @@
       for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
     }
   }
-  // How bright the strike is t ms after it began: a hard flash, a flicker, a second flash, then it dies away.
+  // How bright the strike is t ms after it began: a return stroke, a flicker, then stronger strokes, dying away (as long as the sky glow lasts).
   function boltLevel(t) {
-    if (t < 70) return 1;
-    if (t < 130) return 0.25;
-    if (t < 230) return 0.85;
-    if (t < 600) return 0.85 * (1 - (t - 230) / 370);
+    if (t < 55) return 1;
+    if (t < 110) return 0.18;
+    if (t < 190) return 0.9;
+    if (t < 235) return 0.3;
+    if (t < 330) return 0.65;
+    if (t < 760) return 0.65 * (1 - (t - 330) / 430);
     return 0;
   }
-  function drawBolt(lv) {
-    // the sky lights up round the strike, brighter near the bolt and fading to the corners: never a blinding white screen
-    var g = ctx.createRadialGradient(boltX, H * 0.25, 20, boltX, H * 0.25, W * 0.75);
-    g.addColorStop(0, "rgba(205, 222, 255, " + (0.42 * lv).toFixed(3) + ")");
-    g.addColorStop(1, "rgba(205, 222, 255, " + (0.1 * lv).toFixed(3) + ")");
+  function glow(cx, cy, rx, ry, a) {   // a soft light, wide and low (an ellipse: cloud, not a spotlight)
+    ctx.save();
+    ctx.translate(cx, cy); ctx.scale(1, ry / rx);
+    var g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, "rgba(215, 228, 255, " + a.toFixed(3) + ")");
+    g.addColorStop(0.45, "rgba(190, 210, 255, " + (a * 0.38).toFixed(3) + ")");
+    g.addColorStop(1, "rgba(180, 200, 255, 0)");
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    var passes = [[18, 0.10, "150, 180, 255"], [8, 0.24, "175, 200, 255"], [3, 0.97, "248, 250, 255"]], i;
-    for (i = 0; i < 3; i++) {   // glow, halo, core
-      ctx.beginPath(); pathOf([boltMain]);
-      ctx.lineWidth = passes[i][0]; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * lv).toFixed(3) + ")"; ctx.stroke();
-      ctx.beginPath(); pathOf(boltForks);
-      ctx.lineWidth = passes[i][0] * 0.5; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * 0.8 * lv).toFixed(3) + ")"; ctx.stroke();
+    ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
+    ctx.restore();
+  }
+  function drawBolt(lv) {
+    var a = lv * (0.55 + 0.45 * dist), ground = boltGround[1];
+    // the cloud lights up from within, round the top of the strike (never the whole screen), and the ground where it lands
+    glow(boltTop[0], boltTop[1] + 40, W * (sheetOnly ? 0.55 : 0.4), H * 0.2, (sheetOnly ? 0.46 : 0.5) * a);
+    if (!sheetOnly) {
+      glow(boltGround[0], ground, 170 * dist + 50, 34 * dist + 12, 0.7 * a);
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      var k = 0.55 + 0.9 * dist;   // thicker when nearer
+      var passes = [[16 * k, 0.16, "150, 180, 255"], [7 * k, 0.4, "185, 208, 255"], [2.8 * k, 1, "252, 253, 255"]], i;
+      for (i = 0; i < 3; i++) {   // glow, halo, core
+        ctx.beginPath(); pathOf([boltMain]);
+        ctx.lineWidth = passes[i][0]; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * a).toFixed(3) + ")"; ctx.stroke();
+        ctx.beginPath(); pathOf(boltForks);
+        ctx.lineWidth = passes[i][0] * 0.5; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * 0.75 * a).toFixed(3) + ")"; ctx.stroke();
+      }
     }
   }
   function frame() {   // a few frames while the bolt shows, then the canvas is left empty and nothing runs
@@ -302,6 +333,13 @@
       if (layersEl) layersEl.classList.add("hush");
       if (hushTimer) root.clearTimeout(hushTimer);
       hushTimer = root.setTimeout(function () { hushTimer = null; if (layersEl && Date.now() >= hushUntil) layersEl.classList.remove("hush"); }, ms + 50);
+    },
+
+    // where the ground is in the picture on show: fn(x as a share of the width) -> y as a share of the height (the lightning ends there; the rain and
+    // snow fade out below it: --wx-ground on the layers, app.css)
+    setGround: function (fn, mid) {
+      if (typeof fn === "function") groundFn = fn;
+      if (layersEl && layersEl.style && mid != null) layersEl.style.setProperty("--wx-ground", String(mid));
     },
 
     // a strike right now (a preview, and for tests); only in a storm
