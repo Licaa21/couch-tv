@@ -837,7 +837,7 @@
         // 1 and 2 use the frosted copy instead, so the glass reads as frosted.
         var cx = c.offsetLeft + c.offsetWidth / 2, cy = c.offsetTop + c.offsetHeight / 2, LENS = 1.07;
         var frost = GLASS_AMT <= 2 && s.glass && !s.src;
-        f.style.backgroundImage = s.src ? cssUrl(s.src) : s.place && !frost ? "url(" + placeUrl(ph, ".jpg") + ")" : "url(" + (s.place ? PLACES_BASE : "backgrounds/") + ph + (frost ? "-glass" : "") + ".jpg)";
+        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(" + (s.place ? PLACES_BASE : "backgrounds/") + ph + (frost ? "-glass" : "") + ".jpg)";
         f.style.backgroundSize = LENS * 100 + "vw " + LENS * 100 + "vh";
         f.style.backgroundPosition = (-ex - (LENS - 1) * cx) + "px calc(" + (-ey - (LENS - 1) * cy) + "px + var(--cdy, 0px) * " + LENS + ")";
       } else {
@@ -1113,8 +1113,10 @@
   // A picture that did not come (a hiccup in the network, or the TV out of memory for a 4K one): the same one again, then its 1080p copy, and only at
   // the end the small local one. (It used to go straight to the small one, which looks like 480p and stayed.)
   function setPic(im, url) { im._want = url; im._try = 0; im.src = url; }
+  var PIC_FAIL = { n: 0, last: "" };
   function picFailed(im, id) {
     var u = im._want, n = im._try = (im._try || 0) + 1;
+    if (u && n === 1) { PIC_FAIL.n++; PIC_FAIL.last = u.split("/places/")[1] || u; }
     if (!u || !im.getAttribute("src") || im.src.indexOf("thumb.jpg") >= 0) return;
     var again = function (url, ms) { setTimeout(function () { if (im._want === u) im.src = url; }, ms); };
     if (n === 1) again(u + (u.indexOf("?") < 0 ? "?r=1" : "&r=1"), 1500);                                   // the same one again
@@ -1216,8 +1218,8 @@
   }
   // The clock's own copy of a picture (the frosted glass one) is fetched and decoded with the picture, so the digits never fill in late.
   function glassImg(s, key) {
-    if (!s.glass || (CLOCK_LIQUID && GLASS_AMT > 2)) return [];
-    var im = new Image(); im.src = PLACES_BASE + key + "-glass.jpg"; return [im];
+    if (!s.glass) return [];
+    var im = new Image(); im.src = PLACES_BASE + key + (CLOCK_LIQUID && GLASS_AMT > 2 ? "" : "-glass") + ".jpg"; return [im];   // the 1080p picture for the see-through clock, else the small frosted copy
   }
   function placeFillB(c, f, s) {
     if (!c.classList.contains("under")) placeShade(f, s.id, placeLum(s, s.curA));
@@ -1448,6 +1450,7 @@
     rows.push({ kind: "cycle", key: "day-preview", label: t("day_preview"), sub: t("day_preview_sub"), value: DAY_PREV ? t("day_preview_n", { n: DAY_PREV / 60 }) : t("off"), act: function () {
       setPreview(cycleOf(PREVIEW_STEPS, DAY_PREV));
     } });
+    rows.push({ kind: "info", key: "pic-fail", label: t("pic_fail"), sub: PIC_FAIL.n ? t("pic_fail_last", { f: PIC_FAIL.last }) : t("pic_fail_none"), value: String(PIC_FAIL.n) });
     [["rain", 63], ["storm", 95], ["snow", 73]].forEach(function (w) {
       rows.push({ kind: "toggle", key: "test-" + w[0], label: t("test_" + w[0]), sub: t("test_wx_sub"), value: TEST_WX === w[1] ? t("on") : t("off"), act: function () {
         testWeather(TEST_WX === w[1] ? 0 : w[1]);   // the picture set follows: snow shows the snowy pictures, rain and storm the dark ones
