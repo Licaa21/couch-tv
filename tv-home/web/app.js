@@ -772,7 +772,7 @@
       // A place's clock goes behind the scenery through a mask over the clock (backgrounds/places/<id>/mask.png, samsung/tools/make-place-masks.py),
       // not through a cut-out copy of every picture drawn over it: two full-screen layers fewer, half the downloads, and no seam along the ridge.
       if (s.place) {   // no internet: the small local picture instead of nothing
-        [].forEach.call(el.querySelectorAll(".sbg, .sbg2"), function (im) { im.onerror = function () { if (this.getAttribute("src") && this.src.indexOf("thumb.jpg") < 0) this.src = "backgrounds/places/" + s.id + "/thumb.jpg"; }; });
+        [].forEach.call(el.querySelectorAll(".sbg, .sbg2"), function (im) { im.onerror = function () { picFailed(this, s.id); }; });
       }
       if (s.place && s.fg) { var cm = el.querySelector(".cmask"), mu = "url(backgrounds/places/" + s.id + "/mask.png)"; cm.style.webkitMaskImage = mu; cm.style.maskImage = mu; }
       if (s.mine) {   // your own scene: its clock from config.json (app.css, "your own scenes")
@@ -1110,6 +1110,17 @@
   // 4K or 1080p pictures: <weather>-<time>@2x.jpg and -fg@2x.webp are the 4K ones (the glass copy is blurred, so one size does for both)
   function placeHi() { return PLACE_RES === "4k" || (PLACE_RES === "auto" && HI_RES); }
   // Samsung: the pictures are not in the app (303 MB would not install): settings.js says where they are (a pinned commit on jsDelivr); else the local folder
+  // A picture that did not come (a hiccup in the network, or the TV out of memory for a 4K one): the same one again, then its 1080p copy, and only at
+  // the end the small local one. (It used to go straight to the small one, which looks like 480p and stayed.)
+  function setPic(im, url) { im._want = url; im._try = 0; im.src = url; }
+  function picFailed(im, id) {
+    var u = im._want, n = im._try = (im._try || 0) + 1;
+    if (!u || !im.getAttribute("src") || im.src.indexOf("thumb.jpg") >= 0) return;
+    var again = function (url, ms) { setTimeout(function () { if (im._want === u) im.src = url; }, ms); };
+    if (n === 1) again(u + (u.indexOf("?") < 0 ? "?r=1" : "&r=1"), 1500);                                   // the same one again
+    else if (n === 2) again(u.indexOf("@2x") >= 0 ? u.replace("@2x", "") : u + "?r=2", 3000);              // its 1080p copy (or once more)
+    else im.src = "backgrounds/places/" + id + "/thumb.jpg";                                                  // the small local one
+  }
   function placeUrl(key, ext) { return PLACES_BASE + key + (placeHi() ? ext.replace(/(\.\w+)$/, "@2x$1") : ext); }
   // Day preview only: one long fade per time of day, run by the graphics chip alone (opacity 0 to 1 over exactly the time the preview takes to
   // walk from this share to the next picture). Before, the fade was aimed again every second, and a TV that hiccuped for a moment let it drift
@@ -1225,10 +1236,10 @@
   }
   function placeImgs(s, el) {   // put the pictures of s.L into the layers (no fade)
     var L = s.L, A = placeKey(s, L.A), B = L.B ? placeKey(s, L.B) : "", fg = el.querySelector(".fg"), fg2 = el.querySelector(".fg2");
-    var y = lay(el); y.bot.src = placeUrl(A, ".jpg"); y.bot.style.transition = "none"; y.bot.style.opacity = "1"; y.bot.style.display = "block";
+    var y = lay(el); setPic(y.bot, placeUrl(A, ".jpg")); y.bot.style.transition = "none"; y.bot.style.opacity = "1"; y.bot.style.display = "block";
     if (fg) fg.src = placeUrl(A, "-fg.webp");
     var b2 = y.top;
-    if (B) { b2.src = placeUrl(B, ".jpg"); if (fg2) fg2.src = placeUrl(B, "-fg.webp"); }
+    if (B) { setPic(b2, placeUrl(B, ".jpg")); if (fg2) fg2.src = placeUrl(B, "-fg.webp"); }
     else { b2.removeAttribute("src"); if (fg2) fg2.removeAttribute("src"); }
     s.curA = A; s.curB = B;
     placeBlend(el, B ? L.pB : 0, 0);
@@ -1271,7 +1282,7 @@
     if (L.A.k === T.pair.a && !L.B) {                                                                               // the next picture comes in under the first
       L.B = { wx: T.wx, k: T.pair.b }; L.pB = 0; L.busy = true;
       var b2 = lay(el).top, fg2 = el.querySelector(".fg2");
-      b2.src = placeUrl(placeKey(s, L.B), ".jpg"); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
+      setPic(b2, placeUrl(placeKey(s, L.B), ".jpg")); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
       s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
       whenDecoded([b2].concat(glassImg(s, placeKey(s, L.B))), function () { if (s.L !== L) return; L.busy = false; if (DAY_PREV) { L.pB = 0; return placeUpdate(i); } L.pB = T.pair.p; placeBlend(el, L.pB, 4); });
       return;
@@ -1303,7 +1314,7 @@
       L.B = spec; L.pB = 1;
       var b2 = lay(el).top, fg2 = el.querySelector(".fg2"), key = placeKey(s, spec);
       placeBlend(el, 0, 0);
-      b2.src = placeUrl(key, ".jpg"); if (fg2) fg2.src = placeUrl(key, "-fg.webp");
+      setPic(b2, placeUrl(key, ".jpg")); if (fg2) fg2.src = placeUrl(key, "-fg.webp");
       s.curB = key; placeRedraw(s, el);
       whenDecoded([b2].concat(glassImg(s, key)), function () {
         if (s.L !== L) return;
