@@ -5823,6 +5823,7 @@
       var s = {}, sc = SCENES[scene], L = sc && sc.L, red = function (k, v) { return /key|token|pass|secret|api/i.test(k) && typeof v === "string" && v ? "***" : v; };
       var tryv = function (f) { try { return f(); } catch (e) { return "error: " + e; } };
       s.version = window.COUCH_TIZEN && window.COUCH_TIZEN.version;
+      s.now = Date.now(); s.tzName = tryv(function () { return Intl.DateTimeFormat().resolvedOptions().timeZone; });   // for replaying the screen on another computer
       s.scene = sc && sc.id; s.scenes = SCENES.map(function (x) { return x.id; });
       s.layers = L ? { A: L.A, B: L.B, pB: L.pB, shown: Math.round(placeNow(L) * 1000) / 1000, busy: L.busy, glide: L.g ? { p0: Math.round(L.g.p0 * 1000) / 1000, secs: Math.round(L.g.dur * 10) / 10, age: Math.round((Date.now() - L.g.t0) / 100) / 10 } : null } : null;
       s.target = tryv(function () { var T = placeTarget(); return { wx: T.wx, a: T.pair.a, b: T.pair.b, p: Math.round(T.pair.p * 1000) / 1000 }; });
@@ -5835,6 +5836,52 @@
       s.picFail = PIC_FAIL;
       s.settings = JSON.parse(JSON.stringify(ST, red));
       return s;
+    },
+    // Where everything is and where the focus is (diagnostics, command "ui"): the zone, every app, card, person and quick button with its box, and in the
+    // settings every row with its label and value, so a test can say "go to Testing, Test rain" and know it got there.
+    debugUi: function () {
+      var rectOf = function (el) { if (!el) return null; var r = el.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
+      var txt = function (el) { return el ? String(el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60) : ""; };
+      var list = function (els, fn) { return (els || []).map(function (el, i) { return el ? { i: i, label: fn ? fn(el) : txt(el), rect: rectOf(el), focus: el.classList.contains("focus") } : null; }).filter(Boolean); };
+      var u = { zone: zone, at: { shelf: s, apps: g, people: pi, quick: qi }, expanded: !!expanded, typing: SET.typing ? SET.typing.label : null };
+      u.apps = list(gridEls); u.shelf = list(shelfEls); u.quick = list(quickEls, function (el) { return el.getAttribute("title") || el.getAttribute("aria-label") || txt(el) || String(el.className); });
+      u.people = list([].slice.call($("people").children));
+      u.focused = [].slice.call(document.querySelectorAll(".focus")).slice(0, 8).map(function (el) { return { e: el.tagName.toLowerCase() + "." + String(el.className).split(/\s+/).slice(0, 3).join("."), label: txt(el), rect: rectOf(el) }; });
+      u.menus = [].slice.call(document.querySelectorAll(".gear-pop.on, .app-pop.on, .sleep-menu.on, .people-pop.on, .shelf-pop.on")).map(function (m) { return { e: String(m.className), items: [].slice.call(m.children).map(function (c) { return { label: txt(c), focus: c.classList.contains("focus"), rect: rectOf(c) }; }) }; });
+      if (zone === "settings") {
+        var rows = rowsNow();
+        u.settings = { col: SET.col, section: SECS[SET.sec][0], sections: SECS.map(function (x) { return x[0]; }), sub: SET.sub ? SET.sub.crumb : null, row: SET.ri,
+          rows: rows.map(function (r, i) { return { i: i, kind: r.kind, key: r.key, label: r.label, value: r.value, focusable: focusable(r), focus: SET.col === "rows" && i === SET.ri }; }) };
+      }
+      return u;
+    },
+    // put the focus on something by name, as if the remote had got there (apps, shelf, quick or people, and its number)
+    debugFocus: function (what, i) {
+      i = Math.max(0, +i || 0);
+      if (what === "apps") { zone = "grid"; g = Math.min(i, gridEls.length - 1); }
+      else if (what === "shelf") { zone = "shelf"; s = Math.min(i, shelfEls.length - 1); }
+      else if (what === "quick") { zone = "quick"; qi = Math.min(i, quickEls.length - 1); }
+      else if (what === "people") { zone = "people"; pi = Math.min(i, PEOPLE.length - 1); }
+      else return { error: "apps, shelf, quick or people" };
+      paintFocus();
+      return window.tv.debugUi();
+    },
+    // open Home settings on a section (language, location, weather, look, apps, people, quick, about) and, if given, put the focus on the row whose label or key
+    // contains the text
+    debugSettings: function (section, rowText) {
+      if (zone !== "settings") openSettings();
+      var k = -1, i;
+      for (i = 0; i < SECS.length; i++) if (SECS[i][0] === String(section || "").toLowerCase()) k = i;
+      if (k < 0) return { error: "sections: " + SECS.map(function (x) { return x[0]; }).join(", ") };
+      SET.sec = k; SET.sub = null; SET.col = "secs"; SET.ri = 0; SET.keyFocus = null;
+      if (rowText) {
+        var rows = rowsNow(), want = String(rowText).toLowerCase(), found = -1;
+        for (i = 0; i < rows.length; i++) if (focusable(rows[i]) && (String(rows[i].label || "").toLowerCase().indexOf(want) >= 0 || String(rows[i].key || "").toLowerCase() === want)) { found = i; break; }
+        if (found < 0) { renderSettings(); return { error: "no such row", rows: rows.map(function (r) { return r.label; }) }; }
+        SET.col = "rows"; SET.ri = found; SET.keyFocus = rows[found].key;
+      }
+      renderSettings();
+      return window.tv.debugUi();
     },
     testRows: function () { var r = []; testRows(r); return r.map(function (x) { return x.label + ": " + (x.value || ""); }); },
     weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: WXCFG.place, timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },

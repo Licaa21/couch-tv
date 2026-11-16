@@ -5,10 +5,16 @@
     python samsung/tools/tvdebug.py logs [-n 200] [-f] [--grep text] [--tag scene]
     python samsung/tools/tvdebug.py state              the app's own state (scene, fades, weather, settings, sizes)
     python samsung/tools/tvdebug.py dom                what is on the screen: every box, where, its colour, opacity, picture
-    python samsung/tools/tvdebug.py shot [file.jpg]    a picture of the screen (html2canvas: layout and colours real, masks and blurs not)
+    python samsung/tools/tvdebug.py shot [file.png]    a picture of the screen: the app's own drawing of the TV's state (tvreplay.mjs: same build, settings,
+                                                       moment, time zone and weather, in a browser here), saved as a png; --raw asks the TV for a rough
+                                                       redraw by html2canvas instead
     python samsung/tools/tvdebug.py perf [seconds]     frames a second, long frames, memory over that time
     python samsung/tools/tvdebug.py eval "<javascript>"  run something in the app and print the answer
-    python samsung/tools/tvdebug.py key 13             press a key (13 OK, 37 left, 38 up, 39 right, 40 down, 10009 back)
+    python samsung/tools/tvdebug.py ui                 where the focus is and where everything is (apps, cards, people, buttons, menus, settings rows)
+    python samsung/tools/tvdebug.py press down 3       press keys by name (up down left right ok back) or number, n times; prints the screen's state after
+    python samsung/tools/tvdebug.py focus apps 3       put the focus on apps / shelf / quick / people number 3
+    python samsung/tools/tvdebug.py settings look "Test rain"   open Home settings on a section (and a row whose label contains the text)
+    python samsung/tools/tvdebug.py key 13             press one key by number (13 OK, 37 left, 38 up, 39 right, 40 down, 10009 back)
     python samsung/tools/tvdebug.py reload
 
 On the TV: Home settings, Look and scenes, Testing, Debug connection: type the address `serve` prints (host:port/key), then switch
@@ -228,6 +234,31 @@ def line(e):
     return "%s %-2s %-9s %s" % (t, e.get("l", ""), e.get("g", ""), e.get("m", ""))
 
 
+def show_ui(u):
+    """The screen's state as a short list: where the focus is, and what is where."""
+    if not isinstance(u, dict) or "zone" not in u:
+        print(json.dumps(u, indent=1, ensure_ascii=False))
+        return
+    print("zone: %s   at: %s%s" % (u["zone"], u["at"], "   typing: " + u["typing"] if u.get("typing") else ""))
+    for f in u.get("focused", []):
+        print("  focus -> %-28s %-30s %s" % (f["e"], f["label"], f["rect"]))
+    for name in ("apps", "shelf", "quick", "people"):
+        items = u.get(name) or []
+        if items:
+            print("%s:" % name)
+            for it in items:
+                print("  %s%2d %-34s %s" % ("*" if it["focus"] else " ", it["i"], it["label"], it["rect"]))
+    for m in u.get("menus", []):
+        print("menu %s" % m["e"])
+        for it in m["items"]:
+            print("  %s %-34s %s" % ("*" if it["focus"] else " ", it["label"], it["rect"]))
+    st = u.get("settings")
+    if st:
+        print("settings: section %s%s   column %s   sections: %s" % (st["section"], " > " + st["sub"] if st.get("sub") else "", st["col"], ", ".join(st["sections"])))
+        for r in st["rows"]:
+            print("  %s%2d %-9s %-40s %s" % ("*" if r["focus"] else " ", r["i"], r["kind"], str(r.get("label") or "")[:40], r.get("value") or ""))
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     global PORT
@@ -246,6 +277,7 @@ def main():
     p = sub.add_parser("shot")
     p.add_argument("file", nargs="?", default="")
     p.add_argument("--scale", type=float, default=0.5)
+    p.add_argument("--raw", action="store_true")
     p = sub.add_parser("perf")
     p.add_argument("seconds", nargs="?", type=int, default=10)
     p = sub.add_parser("eval")
@@ -253,6 +285,16 @@ def main():
     p = sub.add_parser("key")
     p.add_argument("code", type=int)
     sub.add_parser("reload")
+    sub.add_parser("ui")
+    p = sub.add_parser("press")
+    p.add_argument("key")
+    p.add_argument("n", nargs="?", type=int, default=1)
+    p = sub.add_parser("focus")
+    p.add_argument("what")
+    p.add_argument("i", nargs="?", type=int, default=0)
+    p = sub.add_parser("settings")
+    p.add_argument("section")
+    p.add_argument("row", nargs="?", default="")
     a = ap.parse_args()
     PORT = a.port
     if a.c == "serve":
@@ -278,12 +320,28 @@ def main():
             time.sleep(1)
     elif a.c in ("state", "dom"):
         print(json.dumps(command(a.c), indent=1, ensure_ascii=False))
-    elif a.c == "shot":
+    elif a.c == "shot" and a.raw:
         r = command("shot", {"scale": a.scale}, 60)
         name = a.file or time.strftime("tvshot-%H%M%S.jpg")
         with open(name, "wb") as f:
             f.write(base64.b64decode(r["img"].split(",", 1)[1]))
         print("saved %s (%dx%d). %s" % (os.path.abspath(name), r["w"], r["h"], r.get("note", "")))
+    elif a.c == "shot":
+        import subprocess
+        state = command("state")
+        name = a.file or time.strftime("tvshot-%H%M%S.png")
+        sf = os.path.join(os.path.dirname(os.path.abspath(name)), ".tvdebug-state.json")
+        with open(sf, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        env = dict(os.environ)
+        env.setdefault("NODE_PATH", os.environ.get("TVDEBUG_NODE_PATH", ""))
+        r = subprocess.run(["node", os.path.join(HERE, "tvreplay.mjs"), sf, name], env=env, capture_output=True, text=True)
+        try:
+            os.remove(sf)
+        except OSError:
+            pass
+        print((r.stdout + r.stderr).strip())
+        print("This is the app's own drawing of the TV's state on this computer, not a capture of the TV's screen.")
     elif a.c == "perf":
         print(json.dumps(command("perf", a.seconds, a.seconds + 15), indent=1))
     elif a.c == "eval":
@@ -292,6 +350,10 @@ def main():
         print(json.dumps(command("key", a.code)))
     elif a.c == "reload":
         print(json.dumps(command("reload")))
+    elif a.c in ("ui", "press", "focus", "settings"):
+        arg = {"press": {"key": getattr(a, "key", ""), "n": getattr(a, "n", 1)}, "focus": {"what": getattr(a, "what", ""), "i": getattr(a, "i", 0)},
+               "settings": {"section": getattr(a, "section", ""), "row": getattr(a, "row", "")}}.get(a.c)
+        show_ui(command(a.c, arg, 30))
 
 
 if __name__ == "__main__":

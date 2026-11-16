@@ -182,6 +182,18 @@
       if (c.cmd === "dom") return done(null, domTree());
       if (c.cmd === "logs") { var n = +a || 100; return done(null, buf.slice(-n)); }
       if (c.cmd === "key") { fireKey(+a); return done(null, { ok: true, key: +a }); }
+      if (c.cmd === "ui") return done(null, W.tv && W.tv.debugUi ? W.tv.debugUi() : { error: "no ui" });
+      if (c.cmd === "focus") return done(null, W.tv.debugFocus(a && a.what, a && a.i));
+      if (c.cmd === "settings") return done(null, W.tv.debugSettings(a && a.section, a && a.row));
+      if (c.cmd === "press") {   // keys by name or number, n times, with a short pause between them; the answer is the screen's state after the last one
+        var codes = { up: 38, down: 40, left: 37, right: 39, ok: 13, enter: 13, back: 10009, home: 36, menu: 10133 }, kc = codes[String(a.key).toLowerCase()] || +a.key, left = Math.max(1, +a.n || 1);
+        var step = function () {
+          fireKey(kc);
+          if (--left > 0) return setTimeout(step, 180);
+          setTimeout(function () { done(null, W.tv.debugUi ? W.tv.debugUi() : { ok: true }); }, 400);
+        };
+        return step();
+      }
       if (c.cmd === "reload") { done(null, { ok: true }); return setTimeout(function () { location.reload(); }, 300); }
       if (c.cmd === "shot") return shot(a, done);
       if (c.cmd === "perf") {

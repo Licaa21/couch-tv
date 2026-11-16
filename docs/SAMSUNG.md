@@ -323,7 +323,11 @@ TV and switch it on. Nothing secret is sent (a setting whose name looks like a k
 | `tvdebug.py perf 10` | frames a second over 10 seconds |
 | `tvdebug.py eval "<js>"` | run something in the app and print the answer |
 | `tvdebug.py key 13` | press a key (13 OK, 37 38 39 40 arrows, 10009 back) |
-| `tvdebug.py shot [file.jpg]` | a picture of the screen, drawn by html2canvas: **only roughly** what the TV paints (no masks, blurs or some filters); the dom and state commands are the reliable ones |
+| `tvdebug.py ui` | where the focus is and where everything is: every app, card, person and quick button with its box, any open menu, and in Home settings every row with its label and value |
+| `tvdebug.py press down 3` | press keys by name (up down left right ok back) or number, n times; prints the screen's state afterwards. This is how a test walks through the app |
+| `tvdebug.py focus apps 3` | put the focus on apps, shelf, quick or people number 3 |
+| `tvdebug.py settings look "Test rain"` | open Home settings on a section, with the focus on the row whose label contains the text |
+| `tvdebug.py shot [file.png]` | a picture of the screen: the app's own drawing of the TV's state (same build, settings, moment, time zone and weather) in a browser on the computer (`tvreplay.mjs`; needs `playwright-core`: set `TVDEBUG_NODE_PATH`). It shows what the app is told to draw, not how fast the TV does it. `--raw` asks the TV for a rough redraw by html2canvas instead (layout and colours only) |
 | `tvdebug.py reload` | reload the app |
 
 The server also writes everything it hears to `tvdebug.log`. Only the computer itself can give commands (the command line talks to
