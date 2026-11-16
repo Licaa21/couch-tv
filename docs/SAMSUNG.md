@@ -303,3 +303,28 @@ Rain, snow and lightning are not in the pictures: they are drawn over them (Home
 - **Day preview:** runs a whole day in 1, 3 or 10 minutes to see the changes. It is not saved: off again after a restart.
 - **Making the pictures:** `samsung/tools/gemini-places.py` has the prompts (Gemini, from the 4K originals), `samsung/tools/make-place-scenes.py` turns
   them into the app's files (`tv-home/web/backgrounds/places/<id>/`, about 14 MB a place). No personal data is in them.
+
+## Diagnostics: the log, the state and the screen from your computer (Testing, Debug connection)
+
+The app can send its log to a small server on your computer, and answer commands from it. It is off until you type the server's address on the
+TV and switch it on. Nothing secret is sent (a setting whose name looks like a key, token or password is replaced by `***`).
+
+1. On the computer: `python samsung/tools/tvdebug.py serve`. It prints an address like `192.168.1.50:5410/uwUkKSchk6Q`.
+2. On the TV: Home settings, Look and scenes, Testing, **Debug connection**: type that address. **Send the log to the debug server** is switched
+   on by itself. The same network is needed (TV and computer).
+3. From another terminal:
+
+| Command | What it gives |
+|---|---|
+| `tvdebug.py status` | is the TV connected |
+| `tvdebug.py logs -n 200` (`-f` follows, `--tag scene`, `--grep text`) | errors, console lines, scene changes, fades, pictures with how long each took and which failed, weather, and a speed line every 10 s (frames a second, frames over 50 ms, memory) |
+| `tvdebug.py state` | the app's own state: scene, the two picture layers and the fade, the weather it shows, flags, settings |
+| `tvdebug.py dom` | every box on the screen: where, its colour, opacity, filter, transform, picture and size |
+| `tvdebug.py perf 10` | frames a second over 10 seconds |
+| `tvdebug.py eval "<js>"` | run something in the app and print the answer |
+| `tvdebug.py key 13` | press a key (13 OK, 37 38 39 40 arrows, 10009 back) |
+| `tvdebug.py shot [file.jpg]` | a picture of the screen, drawn by html2canvas: **only roughly** what the TV paints (no masks, blurs or some filters); the dom and state commands are the reliable ones |
+| `tvdebug.py reload` | reload the app |
+
+The server also writes everything it hears to `tvdebug.log`. Only the computer itself can give commands (the command line talks to
+`127.0.0.1`); the TV's requests need the key. Switch the debug connection off in Testing when you are done.

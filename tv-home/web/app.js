@@ -1146,11 +1146,17 @@
   // Samsung: the pictures are not in the app (303 MB would not install): settings.js says where they are (a pinned commit on jsDelivr); else the local folder
   // A picture that did not come (a hiccup in the network, or the TV out of memory for a 4K one): the same one again, then its 1080p copy, and only at
   // the end the small local one. (It used to go straight to the small one, which looks like 480p and stayed.)
-  function setPic(im, url) { im._want = url; im._try = 0; im.src = url; }
+  function dbg(tag, o) { if (window.TVDBG) window.TVDBG.log(tag, o); }   // the diagnostics log (samsung/app/debug.js), when it is there
+  function setPic(im, url) {
+    im._want = url; im._try = 0; im._t0 = Date.now();
+    im.onload = function () { dbg("pic", { f: (this._want || "").split("/places/")[1] || this._want, ms: Date.now() - this._t0, px: this.naturalWidth, try: this._try }); };
+    im.src = url;
+  }
   var PIC_FAIL = { n: 0, last: "" };
   function picFailed(im, id) {
     var u = im._want, n = im._try = (im._try || 0) + 1;
     if (u && n === 1) { PIC_FAIL.n++; PIC_FAIL.last = u.split("/places/")[1] || u; }
+    dbg("pic-fail", { f: (u || "").split("/places/")[1] || u, n: n });
     if (!u || !im.getAttribute("src") || im.src.indexOf("thumb.jpg") >= 0) return;
     var again = function (url, ms) { setTimeout(function () { if (im._want === u) im.src = url; }, ms); };
     if (n === 1) again(u + (u.indexOf("?") < 0 ? "?r=1" : "&r=1"), 1500);                                   // the same one again
@@ -1168,7 +1174,8 @@
   function startGlide(s, el, L, p) {
     var dur = (1 - Math.min(p, 0.998)) * DAY_PREV / 6;   // seconds until the phase reaches the next picture
     var from = Math.max(0.002, Math.min(p, 0.12));   // a late start (the picture was slow to arrive) begins gently and catches up: never a cut
-    L.g = { t0: Date.now(), p0: from, dur: Math.max(0.3, dur) }; L.pB = 1;   // (pB is the target while a long fade runs: placeNow is how far it has got)
+    L.g = { t0: Date.now(), p0: from, dur: Math.max(0.3, dur) }; L.pB = 1;
+    dbg("glide", { to: placeKey(s, L.B), p: Math.round(p * 1000) / 1000, secs: Math.round(L.g.dur * 10) / 10 });   // (pB is the target while a long fade runs: placeNow is how far it has got)
     placeBlend(el, from, 0); void el.offsetWidth; placeBlend(el, 1, L.g.dur);
     var nx = placeUrl(window.Places.file(s.id, L.B.wx, window.Places.TIMES[(L.B.k + 1) % 6]), ".jpg");   // the one after: fetched while this one fades
     if (L.pre !== nx) { L.pre = nx; (new Image()).src = nx; glassImg(s, window.Places.file(s.id, L.B.wx, window.Places.TIMES[(L.B.k + 1) % 6])); }
@@ -1329,6 +1336,7 @@
   function placeCommit(s, el, L, done) {
     if (s.L !== L || !L.B) return done && done();
     var y = lay(el);
+    dbg("commit", { to: placeKey(s, L.B) });
     L.A = L.B; L.B = null; L.pB = 0; L.g = null; clearTimeout(L.gt); s.curA = placeKey(s, L.A); s.curB = "";
     // the top layer shows this picture at full strength already: it goes below the other one, which is emptied (nothing is loaded here)
     y.top.style.transition = "none"; y.top.style.opacity = "1"; y.top.style.display = "block";
@@ -1341,6 +1349,7 @@
   // The weather changed (or a setting did): first settle the drift on the nearest picture (8 s), then dissolve the new picture in over
   // WX_DISSOLVE seconds, then go on drifting.
   function placeDissolve(s, el, spec) {
+    dbg("dissolve", { to: placeKey(s, spec) });
     var L = s.L, quick = L.guess && !!data.weather, secs = DAY_PREV ? 2 : (quick || TEST_WX) ? 3 : WX_DISSOLVE, fold = DAY_PREV || TEST_WX ? 1 : 8;   // the first weather after the start comes in quickly: it is a correction, not a change
     L.guess = false;
     if (L.g) { L.pB = placeNow(L); L.g = null; clearTimeout(L.gt); placeBlend(el, L.pB, 0); }   // a long fade is stopped where it is
@@ -1379,6 +1388,7 @@
   function changeScene(want) {
     if (changing || want === scene) return;
     changing = true;
+    dbg("scene", { from: SCENES[scene] && SCENES[scene].id, to: SCENES[want] && SCENES[want].id, fx: PLACE_FX });
     var box = $("scenes");
     if (PLACE_FX === "black") {
       box.classList.add("dip");
@@ -1411,6 +1421,7 @@
   function applySunSync() { sceneTick(true); }
   function nextScene() { sceneTick(); }
   function setPreview(secs) {
+    dbg("preview", secs);
     DAY_PREV = secs;
     clearInterval(previewTimer);
     previewFrom = null;
@@ -1477,7 +1488,7 @@
       WX_DISSOLVE = cycleOf(WX_DISSOLVE_STEPS, WX_DISSOLVE); ST.wx_dissolve = WX_DISSOLVE; saveSettings();
     } });
   }
-  function testWeather(code) { TEST_WX = code; clock(); updateAmbientWeather(); sceneTick(true); }
+  function testWeather(code) { dbg("test-wx", code); TEST_WX = code; clock(); updateAmbientWeather(); sceneTick(true); }
   // Home settings, Testing: the day preview and the weathers, to see them without waiting (none of it is saved: off again after a restart)
   function testRows(rows) {
     rows.push(head(t("test_head")));
@@ -1485,6 +1496,14 @@
       setPreview(cycleOf(PREVIEW_STEPS, DAY_PREV));
     } });
     rows.push({ kind: "info", key: "pic-fail", label: t("pic_fail"), sub: PIC_FAIL.n ? t("pic_fail_last", { f: PIC_FAIL.last }) : t("pic_fail_none"), value: String(PIC_FAIL.n) });
+    if (window.TVDBG) {   // the diagnostics (samsung/app/debug.js, samsung/tools/tvdebug.py): off until an address is typed here and the switch is on
+      var ds = window.TVDBG.status();
+      rows.push({ kind: "input", key: "dbg-addr", label: t("dbg_addr"), sub: ds.addr ? ds.addr.replace(/\/[^\/]*$/, "/***") : t("dbg_none"), act: function () {
+        startTyping({ label: t("dbg_type"), value: ds.addr, url: false, submit: function (v) { window.TVDBG.config(v); window.TVDBG.setOn(!!String(v || "").trim()); } });
+      } });
+      rows.push({ kind: "toggle", key: "dbg-on", label: t("dbg_on"), value: ds.on ? t("on") : t("off"), act: function () { window.TVDBG.setOn(!ds.on); } });
+      rows.push(info("dbg-status", t("dbg_status"), ds.on ? (ds.ok ? t("dbg_ok") : t("dbg_err", { e: ds.err || "..." })) : t("off")));
+    }
     [["rain", 63], ["storm", 95], ["snow", 73]].forEach(function (w) {
       rows.push({ kind: "toggle", key: "test-" + w[0], label: t("test_" + w[0]), sub: t("test_wx_sub"), value: TEST_WX === w[1] ? t("on") : t("off"), act: function () {
         testWeather(TEST_WX === w[1] ? 0 : w[1]);   // the picture set follows: snow shows the snowy pictures, rain and storm the dark ones
@@ -5799,6 +5818,24 @@
     preview: function (secs) { setPreview(secs); },
     tick: function () { sceneTick(true); },
     testWeather: function (code) { testWeather(code); },
+    // what the diagnostics ask for (samsung/app/debug.js, command "state"): the app's own state, with nothing secret in it
+    debugState: function () {
+      var s = {}, sc = SCENES[scene], L = sc && sc.L, red = function (k, v) { return /key|token|pass|secret|api/i.test(k) && typeof v === "string" && v ? "***" : v; };
+      var tryv = function (f) { try { return f(); } catch (e) { return "error: " + e; } };
+      s.version = window.COUCH_TIZEN && window.COUCH_TIZEN.version;
+      s.scene = sc && sc.id; s.scenes = SCENES.map(function (x) { return x.id; });
+      s.layers = L ? { A: L.A, B: L.B, pB: L.pB, shown: Math.round(placeNow(L) * 1000) / 1000, busy: L.busy, glide: L.g ? { p0: Math.round(L.g.p0 * 1000) / 1000, secs: Math.round(L.g.dur * 10) / 10, age: Math.round((Date.now() - L.g.t0) / 100) / 10 } : null } : null;
+      s.target = tryv(function () { var T = placeTarget(); return { wx: T.wx, a: T.pair.a, b: T.pair.b, p: Math.round(T.pair.p * 1000) / 1000 }; });
+      s.phase = tryv(function () { return Math.round(currentPhase() * 1000) / 1000; });
+      s.weather = { real: data.weather, shown: wxNow(), test: TEST_WX };
+      s.flags = { SUN_SYNC: SUN_SYNC, SMOOTH_TIME: SMOOTH_TIME, PLACE_RES: PLACE_RES, PLACE_EVERY: PLACE_EVERY, PLACE_FX: PLACE_FX, WX_DISSOLVE: WX_DISSOLVE, DAY_PREV: DAY_PREV, CLOCK_LIQUID: CLOCK_LIQUID, GLASS_AMT: GLASS_AMT, LIGHTER: LIGHTER, HI_RES: HI_RES, WX_SHOW: WX_SHOW, WX_AMBIENT: WX_AMBIENT, NIGHT: NIGHT };
+      s.html = document.documentElement.className;
+      s.ambient = window.AmbientWeather && window.AmbientWeather.getType();
+      s.weatherLayers = document.getElementById("wx-layers") && document.getElementById("wx-layers").className;
+      s.picFail = PIC_FAIL;
+      s.settings = JSON.parse(JSON.stringify(ST, red));
+      return s;
+    },
     testRows: function () { var r = []; testRows(r); return r.map(function (x) { return x.label + ": " + (x.value || ""); }); },
     weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: WXCFG.place, timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },
     screenOff: function () { toggleScreenOff(true); },
@@ -5807,7 +5844,7 @@
     noDream: function () { note(t("no_dream")); },
     // the remote's Settings/gear key, caught by the launcher natively (MainActivity.dispatchKeyEvent)
     settingsKey: function () { blip(0, 0); settingsKey(); },
-    resume: function () { toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(true); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); refreshCards(true); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
+    resume: function () { dbg("resume", 1); toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(true); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); refreshCards(true); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
     // an app is in front: the video background stops until the home is back
     pause: function () { saveFocusNow(); pauseVideo(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)

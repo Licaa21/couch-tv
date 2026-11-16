@@ -108,7 +108,7 @@ def main():
     html = html.replace("<head>", "<head>\n<style>" + SPLASH_CSS + "</style>", 1)
     html = html.replace("<body>", '<body>\n<div id="splash"><i></i></div>', 1)
     html = html.replace(tag, '<script src="$WEBAPIS/webapis/webapis.js"></script>\n'
-                             '<script src="settings.js"></script>\n<script src="tizen-apps.js"></script>\n'
+                             '<script src="settings.js"></script>\n<script src="debug.js"></script>\n<script src="tizen-apps.js"></script>\n'
                              '<script src="avatars.js"></script>\n<script src="weather.js"></script>\n<script src="panel.js"></script>\n<script src="moonfin.js"></script>\n<script src="tizen.js"></script>\n' + tag)
     with open(index, "w") as f:
         f.write(html)
