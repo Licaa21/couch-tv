@@ -837,7 +837,7 @@
         // 1 and 2 use the frosted copy instead, so the glass reads as frosted.
         var cx = c.offsetLeft + c.offsetWidth / 2, cy = c.offsetTop + c.offsetHeight / 2, LENS = 1.07;
         var frost = GLASS_AMT <= 2 && s.glass && !s.src;
-        f.style.backgroundImage = s.src ? cssUrl(s.src) : "url(" + (s.place ? PLACES_BASE : "backgrounds/") + ph + (frost ? "-glass" : "") + ".jpg)";
+        f.style.backgroundImage = s.src ? cssUrl(s.src) : s.place && !frost ? "url(" + placeUrl(ph, ".jpg") + ")" : "url(" + (s.place ? PLACES_BASE : "backgrounds/") + ph + (frost ? "-glass" : "") + ".jpg)";
         f.style.backgroundSize = LENS * 100 + "vw " + LENS * 100 + "vh";
         f.style.backgroundPosition = (-ex - (LENS - 1) * cx) + "px calc(" + (-ey - (LENS - 1) * cy) + "px + var(--cdy, 0px) * " + LENS + ")";
       } else {
@@ -1124,7 +1124,7 @@
     L.g = { t0: Date.now(), p0: from, dur: Math.max(0.3, dur) }; L.pB = 1;   // (pB is the target while a long fade runs: placeNow is how far it has got)
     placeBlend(el, from, 0); void el.offsetWidth; placeBlend(el, 1, L.g.dur);
     var nx = placeUrl(window.Places.file(s.id, L.B.wx, window.Places.TIMES[(L.B.k + 1) % 6]), ".jpg");   // the one after: fetched while this one fades
-    if (L.pre !== nx) { L.pre = nx; (new Image()).src = nx; }
+    if (L.pre !== nx) { L.pre = nx; (new Image()).src = nx; glassImg(s, window.Places.file(s.id, L.B.wx, window.Places.TIMES[(L.B.k + 1) % 6])); }
     placeRedraw(s, el);
     clearTimeout(L.gt);   // the hand-over to the next picture is on time, not at the next tick
     L.gt = setTimeout(function () { if (s.L === L && L.g) placeUpdate(SCENES.indexOf(s)); }, L.g.dur * 1000 + 130);
@@ -1144,13 +1144,34 @@
   // The two picture layers take turns: whichever comes first in the page is the bottom one (always shown), the other fades in over it. When the
   // fade is done, the top one is moved below the other: no picture is loaded or decoded at the hand-over (on the TV that was the cut at the end).
   function lay(el) { var im = el.querySelectorAll(".sbg, .sbg2"); return { bot: im[0], top: im[1] }; }
+  // How strong the clock's glass fill is when it is whole: 1, or with the liquid glass clock the glass amount's own value (--lq-fill, 0.55 to 0.95).
+  // The second fill fades from 0 up to this, not up to 1: both fills must be equally strong when the fade is done, or the clock jumps at every hand-over.
+  function fillMax() {
+    if (!CLOCK_LIQUID || document.documentElement.classList.contains("has-video")) return 1;
+    var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lq-fill"));
+    return v > 0 && v <= 1 ? v : 1;
+  }
+  // With a see-through clock (the liquid glass: each fill at mx below 1) two stacked fills are not a cross-fade: the second one over the first makes the
+  // digits less see-through while it fades in, and they snap back at the hand-over. The first fill therefore fades OUT as the second fades in, by the amount
+  // that keeps the digits exactly as see-through as they should be: a_first = (1 - p) * mx / (1 - p * mx), a_second = p * mx. With mx 1 the first stays whole.
+  function fillA(p, mx) { return mx >= 0.999 ? 1 : p >= 0.999 ? 0 : (1 - p) * mx / (1 - p * mx); }
+  function fillAFade(f, p0, p1, secs, mx) {
+    if (f.getAnimations) f.getAnimations().forEach(function (a) { a.cancel(); });
+    if (mx >= 0.999) { f.style.opacity = "1"; return; }
+    f.style.opacity = p1 <= 0.001 ? "" : String(fillA(p1, mx));
+    if (!secs || !f.animate || Math.abs(p1 - p0) < 0.002) return;
+    var kf = [], i;
+    for (i = 0; i <= 8; i++) kf.push({ opacity: fillA(p0 + (p1 - p0) * i / 8, mx) });
+    f.animate(kf, { duration: secs * 1000, easing: "linear", fill: "forwards" });
+  }
   function placeBlend(el, p, secs) {   // the top layer at opacity p, getting there over secs seconds (0: at once)
-    var l = [lay(el).top].concat([].slice.call(el.querySelectorAll(".fillb")));
+    var l = [lay(el).top].concat([].slice.call(el.querySelectorAll(".fillb"))), mx = fillMax(), cur = parseFloat(getComputedStyle(l[0]).opacity) || 0;
+    [].forEach.call(el.querySelectorAll(".gclock:not(.under) .fill:not(.fillb)"), function (f) { fillAFade(f, cur, p, secs, mx); });
     // not drawn at all while it shows nothing: on a slow TV every full-screen layer costs while the clock moves or the rows scroll
     for (var i = 0; i < l.length; i++) {
       if (p > 0.001) l[i].style.display = "block";
       l[i].style.transition = secs ? "opacity " + secs + "s linear" : "none";
-      l[i].style.opacity = p;
+      l[i].style.opacity = i ? p * mx : p;
       if (p <= 0.001 && !secs) l[i].style.display = "none";
     }
     var k = sceneEls.indexOf(el);
@@ -1182,6 +1203,11 @@
       el.style.filter = "brightness(" + ((night ? 1.15 : 1) * (1 - 0.62 * t)).toFixed(3) + ") saturate(" + ((night ? 1.2 : 1) + 0.3 * t).toFixed(2) + ")";
     }
   }
+  // The clock's own copy of a picture (the frosted glass one) is fetched and decoded with the picture, so the digits never fill in late.
+  function glassImg(s, key) {
+    if (!s.glass || (CLOCK_LIQUID && GLASS_AMT > 2)) return [];
+    var im = new Image(); im.src = PLACES_BASE + key + "-glass.jpg"; return [im];
+  }
   function placeFillB(c, f, s) {
     if (!c.classList.contains("under")) placeShade(f, s.id, placeLum(s, s.curA));
     var fb = c.querySelector(".fill.fillb"), f2 = fb;   // the second fill is a fill of its own with its own opacity (no wrapper: a wrapper's opacity over a clipped-text fill is not drawn right on every TV)
@@ -1190,11 +1216,12 @@
     f2.style.backgroundSize = f.style.backgroundSize;
     f2.style.backgroundPosition = f.style.backgroundPosition;
     if (!c.classList.contains("under") && s.curB) placeShade(f2, s.id, placeLum(s, s.curB));
-    var L = s.L, pb = L && s.curB ? placeNow(L) : 0;
+    var L = s.L, mx = fillMax(), now = L && s.curB ? placeNow(L) : 0, pb = now * mx;
+    if (!c.classList.contains("under")) fillAFade(f, now, L && L.g && s.curB ? 1 : now, L && L.g ? Math.max(0, L.g.dur - (Date.now() - L.g.t0) / 1000) : 0, mx);
     if (L && L.g) fb.style.transition = "none";
     fb.style.opacity = pb;
     fb.style.display = pb > 0.001 ? "block" : "none";   // not drawn while it shows nothing
-    if (L && L.g && s.curB) { var left = L.g.dur - (Date.now() - L.g.t0) / 1000; if (left > 0.2) { void fb.offsetWidth; fb.style.transition = "opacity " + left + "s linear"; fb.style.opacity = 1; } }   // the clock's glass goes on with the same fade
+    if (L && L.g && s.curB) { var left = L.g.dur - (Date.now() - L.g.t0) / 1000; if (left > 0.2) { void fb.offsetWidth; fb.style.transition = "opacity " + left + "s linear"; fb.style.opacity = mx; } }   // the clock's glass goes on with the same fade
   }
   function placeImgs(s, el) {   // put the pictures of s.L into the layers (no fade)
     var L = s.L, A = placeKey(s, L.A), B = L.B ? placeKey(s, L.B) : "", fg = el.querySelector(".fg"), fg2 = el.querySelector(".fg2");
@@ -1246,7 +1273,7 @@
       var b2 = lay(el).top, fg2 = el.querySelector(".fg2");
       b2.src = placeUrl(placeKey(s, L.B), ".jpg"); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
       s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
-      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; if (DAY_PREV) { L.pB = 0; return placeUpdate(i); } L.pB = T.pair.p; placeBlend(el, L.pB, 4); });
+      whenDecoded([b2].concat(glassImg(s, placeKey(s, L.B))), function () { if (s.L !== L) return; L.busy = false; if (DAY_PREV) { L.pB = 0; return placeUpdate(i); } L.pB = T.pair.p; placeBlend(el, L.pB, 4); });
       return;
     }
     placeDissolve(s, el, { wx: T.wx, k: T.pair.a });   // anything else (back from a long wait, a new setting): dissolve to the wanted picture
@@ -1278,7 +1305,7 @@
       placeBlend(el, 0, 0);
       b2.src = placeUrl(key, ".jpg"); if (fg2) fg2.src = placeUrl(key, "-fg.webp");
       s.curB = key; placeRedraw(s, el);
-      whenDecoded([b2].concat(fg2 ? [fg2] : []), function () {
+      whenDecoded([b2].concat(glassImg(s, key)), function () {
         if (s.L !== L) return;
         placeBlend(el, 1, secs);
         setTimeout(function () { if (s.L !== L) return; L.busy = false; placeCommit(s, el, L, function () { placeUpdate(sceneEls.indexOf(el)); }); }, secs * 1000 + 300);
