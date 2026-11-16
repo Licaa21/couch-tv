@@ -67,32 +67,31 @@
     grow(x1, y1, mx, my, off / 2, out);
     grow(mx, my, x2, y2, off / 2, out);
   }
-  // The strike stands in the distance: it comes out of the cloud base, near the middle of the screen where the clock is, and ends ON the ground line of
-  // the picture (groundFn: where the scenery begins at that x), small and thin, with the sky glowing round its top and a glow where it lands. How far
-  // away it is (dist, 0.5 to 1) sets how thick and bright it is. Sometimes there is only sheet lightning: the cloud lights up with no bolt in it.
+  // The strike stands far away: it comes out of the cloud base near the middle of the screen, where the clock is, and goes down BEHIND the scenery. The
+  // picture is a photograph, so nothing in it can say where a bolt lands: the lower end is cut off by the scenery's own outline (maskImg: opaque where
+  // the sky is), or, in a picture with no outline to hide behind, fades out in the haze. It is small and thin, with the cloud glowing round its top and
+  // the ridge lit behind. How far away it is (dist, 0.5 to 1) sets how thick and bright it is. Sometimes there is only sheet lightning (no bolt).
   var groundFn = function () { return 0.58; };
-  var dist = 0.7, sheetOnly = false, boltGround = [0, 0], boltTop = [0, 0];
+  var maskImg = null, maskUrl = "";
+  var dist = 0.7, sheetOnly = false, boltGround = [0, 0], boltTop = [0, 0], boltHidden = false;
   function buildBolt() {
-    var x0 = randomRange(W * 0.28, W * 0.72), y0 = randomRange(H * 0.05, H * 0.2), i;
+    var x0 = randomRange(W * 0.28, W * 0.72), y0 = randomRange(H * 0.05, H * 0.18), i;
     dist = randomRange(0.5, 0.95);
     sheetOnly = Math.random() < 0.28;
-    var g = groundFn(x0 / W), x1 = x0 + randomRange(-110, 110), y1 = (groundFn(x1 / W) + randomRange(0.0, 0.05)) * H;
+    boltHidden = !!(maskImg && maskImg.complete && maskImg.naturalWidth);
+    var x1 = x0 + randomRange(-90, 90), g = groundFn(x1 / W);
+    // behind the scenery: well below its edge; with nothing to hide behind: stops short, in the haze, and fades
+    var y1 = boltHidden ? (g + randomRange(0.06, 0.14)) * H : Math.max(y0 + H * 0.22, (g - randomRange(0.06, 0.12)) * H);
     boltTop = [x0, y0]; boltGround = [x1, y1];
     boltMain = [[x0, y0]];
     boltForks = [];
     if (!sheetOnly) {
-      grow(x0, y0, x1, y1, 70 * dist, boltMain);
+      grow(x0, y0, x1, y1, 64 * dist, boltMain);
       var forks = 1 + Math.floor(Math.random() * 3);
       for (i = 0; i < forks; i++) {   // short branches off the upper part, going down and to the side, thinning out
-        var at = boltMain[2 + Math.floor(Math.random() * Math.max(1, boltMain.length * 0.5 - 2))], dir = Math.random() < 0.5 ? -1 : 1, f = [[at[0], at[1]]];
-        grow(at[0], at[1], at[0] + dir * randomRange(40, 120) * dist, at[1] + randomRange(60, 150) * dist, 26 * dist, f);
+        var at = boltMain[2 + Math.floor(Math.random() * Math.max(1, boltMain.length * 0.45 - 2))], dir = Math.random() < 0.5 ? -1 : 1, f = [[at[0], at[1]]];
+        grow(at[0], at[1], at[0] + dir * randomRange(36, 110) * dist, at[1] + randomRange(50, 130) * dist, 22 * dist, f);
         boltForks.push(f);
-      }
-      // where it reaches the ground it splits into a few short, low branches
-      for (i = 0; i < 2; i++) {
-        var f2 = [[x1, y1]];
-        grow(x1, y1, x1 + (i ? 1 : -1) * randomRange(18, 60) * dist, y1 + randomRange(4, 22) * dist, 10 * dist, f2);
-        boltForks.push(f2);
       }
     }
     boltX = x0;
@@ -125,22 +124,38 @@
     ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
     ctx.restore();
   }
+  // the main bolt in short pieces, each a little fainter than the one above it near the end, so a bolt with nothing to hide its end in dies away
+  function strokeMain(width, alpha, color, a) {
+    var n = boltMain.length, k;
+    for (k = 1; k < n; k++) {
+      var t = k / (n - 1), fade = boltHidden ? 1 : Math.max(0, Math.min(1, (1 - t) / 0.4));
+      if (fade <= 0.02) continue;
+      ctx.beginPath();
+      ctx.moveTo(boltMain[k - 1][0], boltMain[k - 1][1]); ctx.lineTo(boltMain[k][0], boltMain[k][1]);
+      ctx.lineWidth = width * (0.6 + 0.4 * fade); ctx.strokeStyle = "rgba(" + color + ", " + (alpha * a * fade).toFixed(3) + ")"; ctx.stroke();
+    }
+  }
   function drawBolt(lv) {
-    var a = lv * (0.55 + 0.45 * dist), ground = boltGround[1];
-    // the cloud lights up from within, round the top of the strike (never the whole screen), and the ground where it lands
+    var a = lv * (0.55 + 0.45 * dist);
+    // the cloud lights up from within, round the top of the strike (never the whole screen), and the ridge behind the scenery
     glow(boltTop[0], boltTop[1] + 40, W * (sheetOnly ? 0.55 : 0.4), H * 0.2, (sheetOnly ? 0.46 : 0.5) * a);
     if (!sheetOnly) {
-      glow(boltGround[0], ground, 170 * dist + 50, 34 * dist + 12, 0.7 * a);
+      if (boltHidden) glow(boltGround[0], groundFn(boltGround[0] / W) * H, 260 * dist + 80, 40 * dist + 14, 0.5 * a);
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       var k = 0.55 + 0.9 * dist;   // thicker when nearer
       var passes = [[16 * k, 0.16, "150, 180, 255"], [7 * k, 0.4, "185, 208, 255"], [2.8 * k, 1, "252, 253, 255"]], i;
       for (i = 0; i < 3; i++) {   // glow, halo, core
-        ctx.beginPath(); pathOf([boltMain]);
-        ctx.lineWidth = passes[i][0]; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * a).toFixed(3) + ")"; ctx.stroke();
+        strokeMain(passes[i][0], passes[i][1], passes[i][2], a);
         ctx.beginPath(); pathOf(boltForks);
         ctx.lineWidth = passes[i][0] * 0.5; ctx.strokeStyle = "rgba(" + passes[i][2] + ", " + (passes[i][1] * 0.75 * a).toFixed(3) + ")"; ctx.stroke();
       }
+    }
+    // what is in front of the sky hides all of this: only the sky keeps it
+    if (boltHidden) {
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.drawImage(maskImg, 0, 0, W, H);
+      ctx.globalCompositeOperation = "source-over";
     }
   }
   function frame() {   // a few frames while the bolt shows, then the canvas is left empty and nothing runs
@@ -337,8 +352,12 @@
 
     // where the ground is in the picture on show: fn(x as a share of the width) -> y as a share of the height (the lightning ends there; the rain and
     // snow fade out below it: --wx-ground on the layers, app.css)
-    setGround: function (fn, mid) {
+    setGround: function (fn, mid, mask) {
       if (typeof fn === "function") groundFn = fn;
+      if (mask !== maskUrl) {   // the outline of the scenery of the scene on show (backgrounds/places/<id>/mask.png), or none
+        maskUrl = mask || ""; maskImg = null;
+        if (maskUrl && root.Image) { maskImg = new root.Image(); maskImg.src = maskUrl; }
+      }
       if (layersEl && layersEl.style && mid != null) layersEl.style.setProperty("--wx-ground", String(mid));
     },
 

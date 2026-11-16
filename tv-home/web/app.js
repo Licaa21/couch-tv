@@ -1488,7 +1488,7 @@
     var at = function (xf) { return prof ? clampG(prof[Math.max(0, Math.min(prof.length - 1, Math.floor(xf * prof.length)))]) : clampG(sc && sc.water ? sc.water : 0.58); };
     var mid = 0, n = 0, i;
     for (i = 0.15; i <= 0.85; i += 0.1) { mid += at(i); n++; }
-    a.setGround(at, (mid / n).toFixed(3));
+    a.setGround(at, (mid / n).toFixed(3), sc && sc.place && sc.fg ? "backgrounds/places/" + sc.id + "/mask.png" : "");
   }
   function updateAmbientWeather() {
     if (!window.AmbientWeather) return;
