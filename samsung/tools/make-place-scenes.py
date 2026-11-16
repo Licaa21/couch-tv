@@ -149,24 +149,33 @@ DATE_BOX = {"golden": (760, 95, 1160, 165), "water": (760, 205, 1160, 275), "daw
             "fog": (100, 110, 640, 175), "night": (760, 95, 1160, 165)}
 
 
+CLOCK_BOX = {"golden": (640, 152, 1280, 420), "water": (640, 268, 1280, 560), "dawn": (640, 230, 1280, 520), "night": (640, 150, 1280, 420), "fog": (96, 172, 860, 480)}   # where each place's clock sits (the part over the sky): its brightness decides the glass digits
+
+
 def meta():
     """tv-home/web/places-meta.js: for every place a string of 30 characters (weather x time, in the order of WEATHERS and TIMES), "1" where the
     sky behind the date is bright (the date is drawn dark) and "0" where it is dark (light date)."""
-    out = {}
+    out, lum = {}, {}
     for pid in PLACES:
-        s = ""
+        s, ls = "", []
         for w in WEATHERS:
             for t in TIMES:
                 path = os.path.join(BG, "places", pid, "%s-%s.jpg" % (w, t))
                 if not os.path.exists(path):
                     s += "0"
+                    ls.append(0)
                     continue
-                lum = float(np.asarray(Image.open(path).convert("L").crop(DATE_BOX[pid]), np.float32).mean())
-                s += "1" if lum >= 140 else "0"
+                im = Image.open(path).convert("L")
+                v = float(np.asarray(im.crop(DATE_BOX[pid]), np.float32).mean())
+                s += "1" if v >= 140 else "0"
+                ls.append(int(np.asarray(im.crop(CLOCK_BOX[pid]), np.float32).mean()))
         out[pid] = s
+        lum[pid] = ls
     with open(os.path.join(ROOT, "tv-home", "web", "places-meta.js"), "w", encoding="utf-8", newline="\n") as f:
         f.write("// made by samsung/tools/make-place-scenes.py (--meta): 1 = a bright sky behind the date (dark date), 0 = a dark sky\n")
         f.write("window.PLACE_DATE = %s;\n" % repr(out).replace("'", '"'))
+        f.write("// the brightness (0 to 255) behind each place's clock for each of the 30 pictures: the clock's glass is deep on a bright sky, light on a dark one\n")
+        f.write("window.PLACE_LUM = %s;\n" % repr(lum).replace("'", '"'))
     print("places-meta.js:", {k: v.count("1") for k, v in out.items()}, "bright pictures of 30")
 
 

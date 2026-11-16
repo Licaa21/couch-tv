@@ -772,7 +772,7 @@
       // A place's clock goes behind the scenery through a mask over the clock (backgrounds/places/<id>/mask.png, samsung/tools/make-place-masks.py),
       // not through a cut-out copy of every picture drawn over it: two full-screen layers fewer, half the downloads, and no seam along the ridge.
       if (s.place) {   // no internet: the small local picture instead of nothing
-        el.querySelector(".sbg").onerror = function () { if (this.src.indexOf("thumb.jpg") < 0) this.src = "backgrounds/places/" + s.id + "/thumb.jpg"; };
+        [].forEach.call(el.querySelectorAll(".sbg, .sbg2"), function (im) { im.onerror = function () { if (this.getAttribute("src") && this.src.indexOf("thumb.jpg") < 0) this.src = "backgrounds/places/" + s.id + "/thumb.jpg"; }; });
       }
       if (s.place && s.fg) { var cm = el.querySelector(".cmask"), mu = "url(backgrounds/places/" + s.id + "/mask.png)"; cm.style.webkitMaskImage = mu; cm.style.maskImage = mu; }
       if (s.mine) {   // your own scene: its clock from config.json (app.css, "your own scenes")
@@ -944,7 +944,7 @@
         root.style.setProperty("--my-size", s.size * 100 + "vh");
       }
       root.className = root.className.replace(/\b(scene|mine)-\w+/g, "").replace(/\s+/g, " ").trim() + cls;
-      if (s.place) placeTone(s); else root.classList.remove("date-dark", "date-light", "pic-night");
+      if (s.place) placeTone(s); else root.classList.remove("date-dark", "date-light", "ck-deep", "ck-light");
       root.style.setProperty("--cdy-r", sceneEls[i].style.getPropertyValue("--cdy") || "0px");   // the date rises with this scene's clock
       date.classList.remove("swap");
       fitDate();
@@ -1099,9 +1099,9 @@
     if (!L.g) return L.pB;
     return Math.min(1, L.g.p0 + (1 - L.g.p0) * (Date.now() - L.g.t0) / (L.g.dur * 1000));
   }
-  function startGlide(s, el, L, from) {
-    from = Math.max(0.002, Math.min(from, 0.998));
-    var dur = (1 - from) * DAY_PREV / 6;   // seconds until the phase reaches the next picture
+  function startGlide(s, el, L, p) {
+    var dur = (1 - Math.min(p, 0.998)) * DAY_PREV / 6;   // seconds until the phase reaches the next picture
+    var from = Math.max(0.002, Math.min(p, 0.12));   // a late start (the picture was slow to arrive) begins gently and catches up: never a cut
     L.g = { t0: Date.now(), p0: from, dur: Math.max(0.3, dur) }; L.pB = 1;   // (pB is the target while a long fade runs: placeNow is how far it has got)
     placeBlend(el, from, 0); void el.offsetWidth; placeBlend(el, 1, L.g.dur);
     var nx = placeUrl(window.Places.file(s.id, L.B.wx, window.Places.TIMES[(L.B.k + 1) % 6]), ".jpg");   // the one after: fetched while this one fades
@@ -1119,10 +1119,16 @@
     var dark = meta.charAt(i) === "1";
     root.classList.toggle("date-dark", dark);
     root.classList.toggle("date-light", !dark);
-    root.classList.toggle("pic-night", sp.k === 0);   // a night picture is up (Pine fog's clock turns to light glass, app.css)
+    // the clock's glass: deep on a bright sky, light on a dark one (the brightness behind each picture's clock: places-meta.js PLACE_LUM)
+    var lum = window.PLACE_LUM && window.PLACE_LUM[s.id] ? window.PLACE_LUM[s.id][i] : 128;
+    root.classList.toggle("ck-deep", lum >= 120);
+    root.classList.toggle("ck-light", lum < 100);
   }
-  function placeBlend(el, p, secs) {   // layer 2 at opacity p, getting there over secs seconds (0: at once)
-    var l = el.querySelectorAll(".sbg2, .fg2, .fillb");
+  // The two picture layers take turns: whichever comes first in the page is the bottom one (always shown), the other fades in over it. When the
+  // fade is done, the top one is moved below the other: no picture is loaded or decoded at the hand-over (on the TV that was the cut at the end).
+  function lay(el) { var im = el.querySelectorAll(".sbg, .sbg2"); return { bot: im[0], top: im[1] }; }
+  function placeBlend(el, p, secs) {   // the top layer at opacity p, getting there over secs seconds (0: at once)
+    var l = [lay(el).top].concat([].slice.call(el.querySelectorAll(".fillb")));
     // not drawn at all while it shows nothing: on a slow TV every full-screen layer costs while the clock moves or the rows scroll
     for (var i = 0; i < l.length; i++) {
       if (p > 0.001) l[i].style.display = "block";
@@ -1151,9 +1157,9 @@
   }
   function placeImgs(s, el) {   // put the pictures of s.L into the layers (no fade)
     var L = s.L, A = placeKey(s, L.A), B = L.B ? placeKey(s, L.B) : "", fg = el.querySelector(".fg"), fg2 = el.querySelector(".fg2");
-    el.querySelector(".sbg").src = placeUrl(A, ".jpg");
+    var y = lay(el); y.bot.src = placeUrl(A, ".jpg"); y.bot.style.transition = "none"; y.bot.style.opacity = "1"; y.bot.style.display = "block";
     if (fg) fg.src = placeUrl(A, "-fg.webp");
-    var b2 = el.querySelector(".sbg2");
+    var b2 = y.top;
     if (B) { b2.src = placeUrl(B, ".jpg"); if (fg2) fg2.src = placeUrl(B, "-fg.webp"); }
     else { b2.removeAttribute("src"); if (fg2) fg2.removeAttribute("src"); }
     s.curA = A; s.curB = B;
@@ -1184,7 +1190,7 @@
     if (L.A.wx !== T.wx) return placeDissolve(s, el, { wx: T.wx, k: T.pair.a });                 // the weather changed
     if (T.pair.b < 0) { if (L.A.k !== T.pair.a || L.B) placeDissolve(s, el, { wx: T.wx, k: T.pair.a }); return; }   // one picture wanted
     if (L.B && L.A.k === T.pair.a && L.B.k === T.pair.b) {   // the day drifts on: a step of 3 percent or more, then still (a layer that is always fading costs every frame)
-      if (DAY_PREV) { if (!L.g || Math.abs(T.pair.p - placeNow(L)) > 0.08) startGlide(s, el, L, T.pair.p); return; }   // on course, nothing to do
+      if (DAY_PREV) { if (!L.g || Date.now() > L.g.t0 + L.g.dur * 1000 + 2000) startGlide(s, el, L, T.pair.p); return; }   // one fade runs by itself; nothing to correct
       if (L.g) { L.pB = placeNow(L); placeBlend(el, L.pB, 0); L.g = null; clearTimeout(L.gt); }   // the preview was switched off: its long fade stops where it is
       if (Math.abs(T.pair.p - L.pB) >= 0.03) { L.pB = T.pair.p; placeBlend(el, L.pB, 4); }
       return;
@@ -1196,7 +1202,7 @@
     }
     if (L.A.k === T.pair.a && !L.B) {                                                                               // the next picture comes in under the first
       L.B = { wx: T.wx, k: T.pair.b }; L.pB = 0; L.busy = true;
-      var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2");
+      var b2 = lay(el).top, fg2 = el.querySelector(".fg2");
       b2.src = placeUrl(placeKey(s, L.B), ".jpg"); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
       s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
       whenDecoded([b2].concat(fg2 ? [fg2] : []), function () { if (s.L !== L) return; L.busy = false; if (DAY_PREV) { L.pB = 0; return placeUpdate(i); } L.pB = T.pair.p; placeBlend(el, L.pB, 4); });
@@ -1207,18 +1213,15 @@
   // layer 2 becomes layer 1 (they show the same picture, so nothing changes on the screen)
   function placeCommit(s, el, L, done) {
     if (s.L !== L || !L.B) return done && done();
-    L.busy = true;
-    var A = placeKey(s, L.B), sb = el.querySelector(".sbg"), fg = el.querySelector(".fg");
-    sb.src = placeUrl(A, ".jpg"); if (fg) fg.src = placeUrl(A, "-fg.webp");
-    whenDecoded([sb].concat(fg ? [fg] : []), function () {
-      if (s.L !== L) return;
-      L.A = L.B; L.B = null; L.pB = 0; L.g = null; clearTimeout(L.gt); s.curA = A; s.curB = "";
-      placeBlend(el, 0, 0);
-      el.querySelector(".sbg2").removeAttribute("src"); var f2 = el.querySelector(".fg2"); if (f2) f2.removeAttribute("src");
-      placeRedraw(s, el);
-      L.busy = false;
-      if (done) done();
-    });
+    var y = lay(el);
+    L.A = L.B; L.B = null; L.pB = 0; L.g = null; clearTimeout(L.gt); s.curA = placeKey(s, L.A); s.curB = "";
+    // the top layer shows this picture at full strength already: it goes below the other one, which is emptied (nothing is loaded here)
+    y.top.style.transition = "none"; y.top.style.opacity = "1"; y.top.style.display = "block";
+    el.insertBefore(y.top, y.bot);
+    placeBlend(el, 0, 0);   // the layer that is now on top: hidden, with its fill
+    y.bot.removeAttribute("src");
+    placeRedraw(s, el);
+    if (done) done();
   }
   // The weather changed (or a setting did): first settle the drift on the nearest picture (8 s), then dissolve the new picture in over
   // WX_DISSOLVE seconds, then go on drifting.
@@ -1230,7 +1233,7 @@
     var next = function () {
       if (s.L !== L) return;
       L.B = spec; L.pB = 1;
-      var b2 = el.querySelector(".sbg2"), fg2 = el.querySelector(".fg2"), key = placeKey(s, spec);
+      var b2 = lay(el).top, fg2 = el.querySelector(".fg2"), key = placeKey(s, spec);
       placeBlend(el, 0, 0);
       b2.src = placeUrl(key, ".jpg"); if (fg2) fg2.src = placeUrl(key, "-fg.webp");
       s.curB = key; placeRedraw(s, el);
