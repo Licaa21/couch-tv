@@ -19,7 +19,7 @@ rng = np.random.default_rng(11)
 
 
 def tile(draw_fn):
-    im = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
+    im = Image.new("RGBA", (W * SS, H * SS), (230, 240, 255, 0))   # not black: a blur would darken the edges
     d = ImageDraw.Draw(im)
     draw_fn(d)
     return im.resize((W, H), Image.LANCZOS)
@@ -33,26 +33,69 @@ def wrapped(x, y, r):
                 yield x + dx, y + dy
 
 
-def rain(n, ln, width, alpha, name):
-    slant = 0.16
+def blurred(im, radius):
+    """A Gaussian blur that wraps round the edges (the tile is laid 3 x 3, blurred, and the middle cut out), so it stays seamless."""
+    big = Image.new("RGBA", (W * 3, H * 3), (240, 246, 255, 0))
+    for ix in range(3):
+        for iy in range(3):
+            big.paste(im, (ix * W, iy * H))
+    return big.filter(ImageFilter.GaussianBlur(radius)).crop((W, H, 2 * W, 2 * H))
+
+
+def streaks(d, n, ln, width, alpha, slant, color=(212, 228, 255)):
+    """Rain: drops with a bright head and a tail that fades out (so a streak reads as something fast, not a stick)."""
+    for _ in range(n):
+        x, y, L = rng.uniform(0, W), rng.uniform(0, H), rng.uniform(*ln)
+        wd = rng.uniform(*width)
+        a0 = alpha * rng.uniform(0.6, 1.0)
+        for px, py in wrapped(x, y, L + 40):
+            steps = max(4, int(L / 6))
+            for k in range(steps):
+                t0, t1 = k / steps, (k + 1) / steps
+                a = int(255 * a0 * (t1 ** 1.6))   # faint at the top (the tail), bright at the bottom (the head)
+                d.line([((px - L * slant * (1 - t0)) * SS, (py - L * (1 - t0)) * SS), ((px - L * slant * (1 - t1)) * SS, (py - L * (1 - t1)) * SS)],
+                       fill=color + (a,), width=max(1, int(wd * SS)))
+
+
+def rain_far():
+    """Far and middle rain in one tile: many fine, short, faint streaks, and fewer medium ones."""
     def f(d):
-        for _ in range(n):
-            x, y, L = rng.uniform(0, W), rng.uniform(0, H), rng.uniform(*ln)
-            a = int(alpha * rng.uniform(0.7, 1.0) * 255)
-            for px, py in wrapped(x, y, L + 40):
-                d.line([(px * SS, py * SS), ((px - L * slant) * SS, (py - L) * SS)], fill=(205, 225, 255, a), width=max(1, int(width * SS)))
-    tile(f).save(os.path.join(OUT, name), optimize=True)
+        streaks(d, 520, (26, 58), (1.0, 1.5), 0.42, 0.14)
+        streaks(d, 130, (70, 130), (1.8, 2.8), 0.5, 0.14)
+    tile(f).save(os.path.join(OUT, "rain-far.png"), optimize=True)
 
 
-def snow(n, rad, alpha, blur, name):
-    big = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(big)
+def rain_near():
+    """Near rain: a few long, wide, out of focus streaks (blurred, as a drop close to the eye is)."""
+    big = tile(lambda d: streaks(d, 64, (180, 340), (5.0, 9.0), 0.34, 0.14, (225, 238, 255)))
+    blurred(big, 2.6).save(os.path.join(OUT, "rain-near.png"), optimize=True)
+
+
+def flakes(img, n, rad, alpha, blur):
+    d = ImageDraw.Draw(img)
     for _ in range(n):
         x, y, r = rng.uniform(0, W), rng.uniform(0, H), rng.uniform(*rad)
-        a = int(alpha * rng.uniform(0.75, 1.0) * 255)
+        a = int(alpha * rng.uniform(0.7, 1.0) * 255)
         for px, py in wrapped(x, y, r + 8):
-            d.ellipse([px - r, py - r, px + r, py + r], fill=(246, 250, 255, a))
-    big.filter(ImageFilter.GaussianBlur(blur)).save(os.path.join(OUT, name), optimize=True)
+            d.ellipse([px - r, py - r, px + r, py + r], fill=(247, 251, 255, a))
+
+
+def snow_far():
+    """Far and middle snow: many tiny crisp flakes, and some medium ones with a soft edge."""
+    a = Image.new("RGBA", (W, H), (240, 246, 255, 0))
+    flakes(a, 640, (0.9, 1.7), 0.8, 0)
+    b = Image.new("RGBA", (W, H), (240, 246, 255, 0))
+    flakes(b, 170, (2.6, 4.6), 0.95, 0)
+    Image.alpha_composite(a, blurred(b, 0.9)).save(os.path.join(OUT, "snow-far.png"), optimize=True)
+
+
+def snow_near():
+    """Near snow: big soft flakes, out of focus, as bokeh; and a few huge ones very close to the eye."""
+    a = Image.new("RGBA", (W, H), (240, 246, 255, 0))
+    flakes(a, 46, (9, 17), 0.72, 0)
+    c = Image.new("RGBA", (W, H), (240, 246, 255, 0))
+    flakes(c, 7, (34, 58), 0.4, 0)
+    Image.alpha_composite(blurred(a, 3.6), blurred(c, 12)).save(os.path.join(OUT, "snow-near.png"), optimize=True)
 
 
 def fog(name):
@@ -77,10 +120,10 @@ def fog(name):
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
-    rain(170, (18, 34), 1.2, 0.48, "rain-far.png")
-    rain(44, (60, 100), 2.2, 0.72, "rain-near.png")
-    snow(200, (1.1, 2.0), 0.65, 0.5, "snow-far.png")
-    snow(46, (3.0, 5.4), 0.92, 1.0, "snow-near.png")
+    rain_far()
+    rain_near()
+    snow_far()
+    snow_near()
     fog("fog.png")
     for f in sorted(os.listdir(OUT)):
         print(f, round(os.path.getsize(os.path.join(OUT, f)) / 1024), "KB")

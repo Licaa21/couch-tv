@@ -306,5 +306,3 @@ html.lighter .weather-canvas, html.lighter .wx-layers.on { display: block !impor
    a filter again on every frame it draws. The places' night pictures are dark by themselves. Under Lighter home the clock has no soft shadow either. */
 .scene.pl .sbg, .scene.pl .sbg2 { filter: none !important; }
 html.lighter .scene .gclock:not(.under) { filter: none !important; }
-/* Lighter home: one layer of rain or snow, not two (each is a full screen the TV blends on every frame) */
-html.lighter .wx-layers .wx-l.near { display: none !important; }

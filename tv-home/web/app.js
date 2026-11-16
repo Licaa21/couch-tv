@@ -695,7 +695,7 @@
   ];
   var BUILT_IN = SCENE_LIB.slice();   // readConfig() adds your own scenes to SCENE_LIB
   var SCENES = SCENE_LIB.slice(), SCENE_MS = 20000, SUN_SYNC = false;
-  var scene = 0, sceneEls = [], glassShown = "", lastKeyAt = 0, lastRepeatAt = 0;
+  var dissolveTimer = 0, sceneZ = 1, scene = 0, sceneEls = [], glassShown = "", lastKeyAt = 0, lastRepeatAt = 0;
 
   // Your own scenes (home.my_scenes in config.json), made with tools/make-scene.py: the photo, glass
   // copy and cut-out in backgrounds/mine/, and how its clock looks. Anything odd falls back to the
@@ -949,11 +949,20 @@
       date.classList.remove("swap");
       fitDate();
     }, 600);
+    sceneEls[i].style.zIndex = String(++sceneZ);   // the new scene is above the old one
     sceneEls[i].classList.add("on");
-    if (prev !== i) sceneEls[prev].classList.remove("on");
+    if (prev !== i) {
+      // A dissolve: the old scene stays fully drawn while the new one fades in over it, and goes when the new one is whole (two scenes both fading
+      // left a dark dip half way, where each was half strength over black)
+      clearTimeout(dissolveTimer);
+      var gone = function () { sceneEls.forEach(function (el, k) { if (k !== scene) el.classList.remove("on"); }); };
+      if ($("scenes").classList.contains("slow")) dissolveTimer = setTimeout(gone, 4100);
+      else gone();
+    }
     // after the fade, stop drawing the old one and get the next one ready (the first time, once the home has settled: two scenes'
     // pictures decoded while it starts is what a slow TV feels)
     var readyAfter = sceneBooted ? 2000 : Math.max(2000, Math.min(9000, SCENE_MS - 3000));
+    if ($("scenes").classList.contains("slow")) readyAfter = Math.max(readyAfter, 4700);   // the old scene stays drawn until the dissolve is over
     sceneBooted = true;
     setTimeout(function () {
       var next = nextFrom(scene);
@@ -5493,7 +5502,8 @@
     return api("POST", "/api/watch-next", { rows: rows });
   }
 
-  function refresh() {
+  var lastRenderSig = "";
+  function refresh(quiet) {   // quiet: coming back from an app, redraw nothing if nothing changed
     // never reshuffle under something being moved, or under the settings screen
     if (lift || zone === "pmenu" || zone === "settings" || zone === "gear" || zone === "smart" || zone === "updask") return Promise.resolve();
     if (OFFLINE) {
@@ -5507,6 +5517,10 @@
       }
       detectNew();
       status(ALONE ? "" : t("computer_off"), true);
+      // coming back from an app nothing may be redrawn when nothing changed (the dock's icons and the rows used to be built again, and flashed)
+      var sig = JSON.stringify([(data.apps || []).map(function (a) { return a.id || a.package || a.name || ""; }), Array.isArray(data.shared) ? data.shared.map(function (x) { return x.id || x.title || ""; }) : 0, data.order]);
+      if (quiet && sig === lastRenderSig) return Promise.resolve();
+      lastRenderSig = sig;
       render();
       return Promise.resolve();
     }
@@ -5605,7 +5619,7 @@
     noDream: function () { note(t("no_dream")); },
     // the remote's Settings/gear key, caught by the launcher natively (MainActivity.dispatchKeyEvent)
     settingsKey: function () { blip(0, 0); settingsKey(); },
-    resume: function () { toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); refreshCards(true); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
+    resume: function () { toggleScreenOff(false); setIdleAmbient(false); resetSmartIdle(); okReset(); refresh(true); if (!OFFLINE) refreshQuick(); refreshWeather(); startVideo(); sceneVideos(true); refreshMusic(); refreshCards(true); if (window.AmbientWeather) window.AmbientWeather.resume(); resetIdlePhoto(); },
     // an app is in front: the video background stops until the home is back
     pause: function () { saveFocusNow(); pauseVideo(); },
     // the launcher's file picker has copied the chosen photos into its own storage (Home settings)

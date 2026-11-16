@@ -104,28 +104,39 @@ body {
    Each is a seamless transparent tile (backgrounds/fx, samsung/tools/make-weather-fx.py) on a layer twice the screen's height, slid by exactly
    one tile with a CSS animation: the graphics chip does it, the processor does nothing frame by frame. ambient-weather.js sets the
    classes on #wx-layers: on, wx-rain|wx-snow|wx-fog, lv1|lv2|lv3 (how hard), paused, hush (someone is moving along the rows). */
-.wx-layers { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; pointer-events: none; z-index: 0; display: none; }
+.wx-layers { position: fixed; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; pointer-events: none; z-index: 0; display: none;
+  perspective: 1100px; perspective-origin: 50% 30%; }
 .wx-layers.on { display: block; }
-.wx-wrap { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
-.wx-l { position: absolute; left: 0; width: 100%; top: -100%; height: 200%; background-repeat: repeat; background-size: 100% 50%;
+/* The layers stand on a plane tilted away from the eye (the wrap): perspective makes the streaks and flakes smaller, finer and slower toward the
+   top, nearer and bigger toward the bottom: depth from one static transform, which costs the graphics chip nothing extra. Each layer sways on its
+   own (wx-sw: the wind, different for the far and the near one) and falls on its own (wx-l). */
+.wx-wrap { position: absolute; top: 0; right: 0; bottom: 0; left: 0; transform: rotateX(16deg); transform-origin: 50% 100%; }
+.wx-fog .wx-wrap { transform: none; }
+.wx-sw { position: absolute; top: 0; bottom: 0; left: -40%; width: 180%; }
+.wx-l { position: absolute; left: 0; width: 100%; top: -100%; height: 200%; background-repeat: repeat; background-size: 55.5556% 50%;
   display: none; opacity: 0; will-change: transform; animation-timing-function: linear; animation-iteration-count: infinite; }
 @keyframes wx-fall { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 50%, 0); } }
-@keyframes wx-sway { from { transform: translate3d(-24px, 0, 0); } to { transform: translate3d(24px, 0, 0); } }
+@keyframes wx-wind-far { from { transform: translate3d(-18px, 0, 0); } to { transform: translate3d(18px, 0, 0); } }
+@keyframes wx-wind-near { from { transform: translate3d(40px, 0, 0); } to { transform: translate3d(-40px, 0, 0); } }
 @keyframes wx-drift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
-.wx-rain .far { background-image: url(backgrounds/fx/rain-far.png); animation-name: wx-fall; animation-duration: 0.85s; }
-.wx-rain .near { background-image: url(backgrounds/fx/rain-near.png); animation-name: wx-fall; animation-duration: 0.5s; }
-.wx-snow .wx-wrap { left: -40px; right: -40px; animation: wx-sway 6s ease-in-out infinite alternate; }
-.wx-snow .far { background-image: url(backgrounds/fx/snow-far.png); animation-name: wx-fall; animation-duration: 14s; }
-.wx-snow .near { background-image: url(backgrounds/fx/snow-near.png); animation-name: wx-fall; animation-duration: 7s; }
-.wx-rain.lv1 .far, .wx-rain.lv2 .far, .wx-rain.lv3 .far, .wx-snow.lv1 .far, .wx-snow.lv2 .far, .wx-snow.lv3 .far { display: block; opacity: 1; }
-.wx-rain.lv2 .near, .wx-snow.lv2 .near { display: block; opacity: 0.55; }
-.wx-rain.lv3 .near, .wx-snow.lv3 .near { display: block; opacity: 1; }
+.wx-sw.far { animation: wx-wind-far 7s ease-in-out infinite alternate; }
+.wx-sw.near { animation: wx-wind-near 4.6s ease-in-out infinite alternate; }
+.wx-snow .wx-sw.far { animation-duration: 9s; }
+.wx-snow .wx-sw.near { animation-duration: 6s; }
+.wx-rain .wx-l.far { background-image: url(backgrounds/fx/rain-far.png); animation-name: wx-fall; animation-duration: 0.95s; }
+.wx-rain .wx-l.near { background-image: url(backgrounds/fx/rain-near.png); animation-name: wx-fall; animation-duration: 0.5s; }
+.wx-snow .wx-l.far { background-image: url(backgrounds/fx/snow-far.png); animation-name: wx-fall; animation-duration: 16s; }
+.wx-snow .wx-l.near { background-image: url(backgrounds/fx/snow-near.png); animation-name: wx-fall; animation-duration: 8s; }
+.wx-rain.lv1 .wx-l.far, .wx-rain.lv2 .wx-l.far, .wx-rain.lv3 .wx-l.far, .wx-snow.lv1 .wx-l.far, .wx-snow.lv2 .wx-l.far, .wx-snow.lv3 .wx-l.far { display: block; opacity: 1; }
+.wx-rain.lv2 .wx-l.near, .wx-snow.lv2 .wx-l.near { display: block; opacity: 0.55; }
+.wx-rain.lv3 .wx-l.near, .wx-snow.lv3 .wx-l.near { display: block; opacity: 1; }
 /* fog: soft clouds drifting sideways, twice the screen's width */
-.wx-fog .far { display: block; top: 0; height: 100%; width: 200%; background-image: url(backgrounds/fx/fog.png); background-size: 50% 100%; animation-name: wx-drift; animation-duration: 120s; }
-.wx-fog.lv1 .far { opacity: 0.55; }
-.wx-fog.lv2 .far { opacity: 0.8; }
-.wx-fog.lv3 .far { opacity: 1; }
-.wx-layers.paused .wx-l, .wx-layers.hush .wx-l, .wx-layers.paused .wx-wrap, .wx-layers.hush .wx-wrap { animation-play-state: paused; }
+.wx-fog .wx-sw { left: 0; width: 100%; animation: none; }
+.wx-fog .wx-l.far { display: block; top: 0; height: 100%; width: 200%; background-image: url(backgrounds/fx/fog.png); background-size: 50% 100%; animation-name: wx-drift; animation-duration: 120s; }
+.wx-fog.lv1 .wx-l.far { opacity: 0.55; }
+.wx-fog.lv2 .wx-l.far { opacity: 0.8; }
+.wx-fog.lv3 .wx-l.far { opacity: 1; }
+.wx-layers.paused .wx-l, .wx-layers.hush .wx-l, .wx-layers.paused .wx-sw, .wx-layers.hush .wx-sw { animation-play-state: paused; }
 
 /* the date line takes the colour that reads on the picture behind it (app.js sets date-dark or date-light for a place's picture) */
 html.date-dark .date { color: #16201d !important; text-shadow: none !important; }
