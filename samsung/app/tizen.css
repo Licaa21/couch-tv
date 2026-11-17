@@ -242,7 +242,9 @@ html.cp-open #cp-hint { opacity: 0; animation: none; }
 
 /* the date line sits just above the clock, so it rises with it (app.js fitScene, showScene) */
 .theme-night .date { transform: translateY(calc(var(--cdy-r, 0px) * -1)); transition: opacity 600ms ease-in-out, transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1), color var(--tone-s, 3s) linear, text-shadow var(--tone-s, 3s) linear; }   /* color: the date goes dark or light with the picture behind it, over as long as the picture fades (app.js placeTone) */
-.theme-night .date .wx { transition: color var(--tone-s, 3s) linear; }
+/* The weather line takes its colour from the date (color: inherit), so it must not run a transition of its own: that one started again from the date's moving colour
+   and the two lines changed one after the other (the date in 2 s, the weather line crawling for much longer). Without it both follow the same colour at the same time. */
+.theme-night .date .wx, .theme-night .date .date-label, .theme-night .date .dline { transition: none; }
 /* A 2018 TV (Tizen 4.0) stops clipping a tile's picture to the face's rounded corners while the
    tile scales or fades, so the logo shows square for about a second. Rounding the picture and the
    glint themselves keeps the corners; a mask on the face would also cut its shadow. */
