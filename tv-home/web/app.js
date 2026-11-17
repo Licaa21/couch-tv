@@ -5793,6 +5793,15 @@
 
   // the native side calls these
   // Home on the remote also re-reads the lists, so an order arranged on the phone shows straight away
+  // Diagnostics only (samsung/app/debug.js defines TVPROF): time the big functions by name, so a slow one shows up in the debug log.
+  if (window.TVPROF) {
+    render = TVPROF("render", render); renderSettings = TVPROF("renderSettings", renderSettings); clock = TVPROF("clock", clock);
+    drawClocks = TVPROF("drawClocks", drawClocks); sceneTick = TVPROF("sceneTick", sceneTick); placeUpdate = TVPROF("placeUpdate", placeUpdate);
+    refreshCards = TVPROF("refreshCards", refreshCards); refreshWeather = TVPROF("refreshWeather", refreshWeather); renderShelf = TVPROF("renderShelf", renderShelf);
+    paintFocus = TVPROF("paintFocus", paintFocus); renderQuick = TVPROF("renderQuick", renderQuick); renderPeople = TVPROF("renderPeople", renderPeople);
+    renderNp = TVPROF("renderNp", renderNp); refreshMusic = TVPROF("refreshMusic", refreshMusic); followWho = TVPROF("followWho", followWho);
+    checkSmartIdle = TVPROF("checkSmartIdle", checkSmartIdle); nextPhoto = TVPROF("nextPhoto", nextPhoto);
+  }
   window.tv = { back: function () { if (idleAmbientActive) { setIdleAmbient(false); resetSmartIdle(); return; } if (idlePhotoInput(null)) return; goHome(); resetIdlePhoto(); resetSmartIdle(); },
     home: function () { forgetFocus(); if (idleAmbientActive) { setIdleAmbient(false); resetSmartIdle(); return; } if (idlePhotoInput(null)) return; if (zone === "settings") closeSettings(); else goHome(); refresh(); resetIdlePhoto(); resetSmartIdle(); },
     // re-read the lists and redraw, nothing else (the Samsung app's Jellyfin row arrives late)

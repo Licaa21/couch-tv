@@ -330,5 +330,7 @@ TV and switch it on. Nothing secret is sent (a setting whose name looks like a k
 | `tvdebug.py shot [file.png]` | a picture of the screen: the app's own drawing of the TV's state (same build, settings, moment, time zone and weather) in a browser on the computer (`tvreplay.mjs`; needs `playwright-core`: set `TVDEBUG_NODE_PATH`). It shows what the app is told to draw, not how fast the TV does it. `--raw` asks the TV for a rough redraw by html2canvas instead (layout and colours only) |
 | `tvdebug.py reload` | reload the app |
 
+**Which callback is slow (0.15.5).** If the debug connection is already on when the app starts, the app times every timer, key handler, animation frame and XHR callback (and its big functions by name). In `logs` a callback over 100 ms shows as `slow` with its source, a gap over 150 ms between frames as `stall` with everything that ran in it (a stall with nothing in it is the browser's own layout or paint), and a key that took over 120 ms to reach the next frame as `keylag`. Switch the connection on, then `tvdebug.py reload`, then read `logs --tag slow` and `--tag stall`.
+
 The server also writes everything it hears to `tvdebug.log`. Only the computer itself can give commands (the command line talks to
 `127.0.0.1`); the TV's requests need the key. Switch the debug connection off in Testing when you are done.
