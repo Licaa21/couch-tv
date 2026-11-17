@@ -5933,7 +5933,7 @@
       return window.tv.debugUi();
     },
     testRows: function () { var r = []; testRows(r); return r.map(function (x) { return x.label + ": " + (x.value || ""); }); },
-    weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: WXCFG.place, timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },
+    weatherCfg: function () { return { lat: WXCFG.lat, lon: WXCFG.lon, place: weatherPlace(), timezone: WXCFG.timezone, f: WX_F, show: WX_SHOW }; },
     screenOff: function () { toggleScreenOff(true); },
     wakeScreen: function () { toggleScreenOff(false); },
     isScreenOff: function () { return screenOffActive; },

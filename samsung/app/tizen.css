@@ -141,7 +141,8 @@ html.wx-open .date { transition: none; }
 #wx-panel .wx-msg { position: absolute; top: 45%; left: 0; right: 0; text-align: center; font-size: 2rem; opacity: 0.8; }
 #wx-panel .wx-grid { display: grid; grid-template-columns: 1fr 32rem; grid-template-rows: auto auto; align-content: end; gap: 1.5rem 4rem; height: 100%; box-sizing: border-box; padding: 0 5rem 3rem; }
 #wx-panel h1 { margin: 0; font-size: 3rem; line-height: 3.5rem; font-weight: 700; }
-#wx-panel .wx-main p { margin: 0.25rem 0 0; font-size: 1.5rem; opacity: 0.75; text-transform: capitalize; }
+#wx-panel .wx-main p { margin: 0.25rem 0 0; font-size: 1.5rem; opacity: 0.75; }
+#wx-panel .wx-main p::first-letter { text-transform: uppercase; }   /* the day's first letter only: "Marți, 17 noiembrie" (capitalize made it "17 Noiembrie") */
 #wx-panel .wx-now { display: flex; align-items: center; margin-top: 1rem; }
 #wx-panel .wx-now i { width: 6rem; height: 6rem; margin-right: 1.5rem; }
 #wx-panel .wx-now b { font-size: 6rem; line-height: 6rem; font-weight: 300; letter-spacing: -0.03em; }
