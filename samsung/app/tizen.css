@@ -306,3 +306,7 @@ html.lighter .weather-canvas, html.lighter .wx-layers.on { display: block !impor
    a filter again on every frame it draws. The places' night pictures are dark by themselves. Under Lighter home the clock has no soft shadow either. */
 .scene.pl .sbg, .scene.pl .sbg2 { filter: none !important; }
 html.lighter .scene .gclock:not(.under) { filter: none !important; }
+/* The glass clock's fill is text clipped from the picture, with a brightness/saturate filter (placeShade). Each time the digits change (every minute) the
+   TV drew the filter again over the whole 1920 px wide clock in software: about 540 ms with the page frozen (measured on a 2021 Q67A). On a layer of its
+   own the same change takes about 110 ms, and the clock looks the same. */
+.gclock .fill { will-change: transform; }
