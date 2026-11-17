@@ -102,6 +102,7 @@
   // ---------- optional debug log (build.py --log-url), for testing without a screenshot ----------
   var LOG = S.log || "";
   function send(kind, data) {
+    try { if (window.TVDBG) window.TVDBG.log("tizen-" + kind, typeof data === "string" ? data.slice(0, 300) : String(JSON.stringify(data)).slice(0, 300)); } catch (e) {}   // the diagnostics log: app launches and what the TV answered
     if (!LOG) return;
     try {
       var x = new XMLHttpRequest();

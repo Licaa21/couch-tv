@@ -222,6 +222,7 @@
     if (!cfg || busy || (!force && Date.now() - lastTry < 30000)) { if (done) done(null); return; }
     busy = true; lastTry = Date.now();
     function bad(e) {
+      try { if (window.TVDBG) window.TVDBG.log("jellyfin-fail", String(e)); } catch (e0) {}
       var changed = problem !== e;
       problem = e; busy = false;
       if (e === "net") setDown(true);
@@ -245,6 +246,7 @@
           var wasDown = down;
           down = false;
           syncImages(cards.reduce(function (a, k) { return a.concat([k.backdrop, k.poster]); }, []));
+          try { if (window.TVDBG) window.TVDBG.log("jellyfin", { cards: items.length, changed: changed, nextUpFailed: !!err3 }); } catch (e1) {}
           if (changed || wasDown) { lastUpdate = Date.now(); redraw(); }
           if (done) done(null, items.length);
         });

@@ -51,6 +51,7 @@
     var end = function (err) { if (fin) return; fin = true; done(err, x.status, x.responseText); };
     try {
       x.open(method, url);
+      x.__tvl = null;   // its own calls are not part of the network log
       x.timeout = timeout;
       x.onload = function () { end(null); };
       x.onerror = function () { end(new Error("no answer from the server")); };
@@ -65,6 +66,7 @@
   // gap over 150 ms is logged ("stall") with every callback that ran in it, so a stall with no callback in it is the browser's own layout or paint. ----
   var prof = { on: !!cfg.on, ring: [], keyAt: 0, keyCode: 0 };
   var rafOrig = W.requestAnimationFrame, cafOrig = W.cancelAnimationFrame;
+  var aelRaw = W.EventTarget && W.EventTarget.prototype.addEventListener;   // the real one: the network log listens with it, not through the timing wrapper
   function src(fn) { var s = ""; try { s = Function.prototype.toString.call(fn).replace(/\s+/g, " "); } catch (e) {} return s.length > 160 ? s.slice(0, 160) + "..." : s; }
   function took(kind, ms, fn, label) {
     var e = { t: Date.now(), ms: Math.round(ms), k: kind, s: label ? label + " " + src(fn) : src(fn) };
@@ -110,7 +112,102 @@
     });
   } catch (eP) { add("e", "profiler", "could not wrap the timers: " + eP); }
   // keys: when one was pressed, so the first frame after it can say how long the screen took to answer
-  W.addEventListener("keydown", function (e) { if (prof.on && perf.on) { prof.keyAt = performance.now(); prof.keyCode = e.keyCode; add("ev", "key", e.keyCode); } }, true);
+  var focusTimer = 0;
+  function logFocus() {   // where the focus is after a key: the element's classes, its words and its box
+    var e = document.querySelector(".focus");
+    if (!e) return add("ev", "focus", "none");
+    var r = e.getBoundingClientRect();
+    add("ev", "focus", String(e.className).split(/\s+/).slice(0, 4).join(".") + " '" + short((e.textContent || "").replace(/\s+/g, " ").trim(), 40) + "' " + [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(","));
+  }
+  W.addEventListener("keydown", function (e) {
+    if (prof.on && perf.on) { prof.keyAt = performance.now(); prof.keyCode = e.keyCode; add("ev", "key", e.keyCode); clearTimeout(focusTimer); focusTimer = setTimeout(logFocus, 150); }
+  }, true);
+
+  // ---- everything else that happens: network calls, settings written, class changes (scene, date colour, menus), pictures that failed, the page hidden ----
+  function cleanUrl(u) { return short(String(u || "").split("#")[0].split("?")[0].replace(/^https?:\/\//, ""), 110); }   // no query: tokens and keys travel there
+  function logNet(kind, method, url, status, ms, size) {
+    var p = parse();
+    if (p && String(url).indexOf(p.base) === 0) return;   // the debug server's own calls
+    add(status >= 400 || status < 0 ? "w" : "ev", "net", kind + " " + method + " " + cleanUrl(url) + " -> " + (status < 0 ? "failed" : status || "no status") + " " + Math.round(ms) + " ms" + (size >= 0 ? " " + size + " B" : ""));
+  }
+  if (cfg.on) try {
+    var XP2 = W.XMLHttpRequest.prototype, xo = XP2.open, xs = XP2.send;
+    XP2.open = function (m, u) { try { this.__tvl = { m: m, u: String(u) }; } catch (e) {} return xo.apply(this, arguments); };
+    XP2.send = function () {
+      var l = this.__tvl, x = this;
+      if (l && prof.on && aelRaw) { l.t = performance.now(); aelRaw.call(x, "loadend", function () { try { logNet("xhr", l.m, l.u, x.status, performance.now() - l.t, x.responseType === "" || x.responseType === "text" ? (x.responseText || "").length : -1); } catch (e) {} }); }
+      return xs.apply(this, arguments);
+    };
+    if (W.fetch) {
+      var f0 = W.fetch;
+      W.fetch = function (u, o) {
+        var t = performance.now(), m = (o && o.method) || (u && u.method) || "GET", url = typeof u === "string" ? u : (u && u.url) || "", pr = f0.apply(W, arguments);
+        if (prof.on) pr.then(function (r) { logNet("fetch", m, url, r.status, performance.now() - t, -1); }, function () { logNet("fetch", m, url, -1, performance.now() - t, -1); });
+        return pr;
+      };
+    }
+    var lsSet0 = W.Storage.prototype.setItem;   // what the app writes to its storage: a setting by its name and short value (a name that looks like a key or token is masked), any other entry by its size only
+    W.Storage.prototype.setItem = function (k, v) {
+      try {
+        if (prof.on && k !== KEY) {
+          if (/settings/.test(k)) {
+            var a = (JSON.parse(this.getItem(k) || "{}") || {}).s || {}, b = (JSON.parse(v) || {}).s || {}, d = {}, n = 0;
+            Object.keys(b).concat(Object.keys(a)).forEach(function (x) { if (!(x in d) && JSON.stringify(a[x]) !== JSON.stringify(b[x])) { d[x] = b[x] === undefined ? "(removed)" : short(safe(b[x]), 80); n++; } });
+            if (n) add("ev", "setting", d);
+          } else add("ev", "store", k + " " + String(v).length + " B");
+        }
+      } catch (e) {}
+      return lsSet0.apply(this, arguments);
+    };
+  } catch (eN) { add("e", "profiler", "could not wrap the network and storage: " + eN); }
+  var failSeen = {};
+  document.addEventListener("error", function (e) {   // a picture, script or style that did not load
+    var t = e.target;
+    if (prof.on && t && t.tagName && /^(IMG|SCRIPT|LINK|VIDEO|AUDIO|SOURCE)$/.test(t.tagName)) {
+      var u = cleanUrl(t.currentSrc || t.src || t.href), now = Date.now();
+      if (failSeen[u] && now - failSeen[u] < 30000) return;   // the same one again within 30 s (a retry): once is enough
+      failSeen[u] = now;
+      add("w", "load-fail", t.tagName.toLowerCase() + " " + u);
+    }
+  }, true);
+  W.addEventListener("online", function () { if (prof.on) add("w", "net-state", "online"); });
+  W.addEventListener("offline", function () { if (prof.on) add("w", "net-state", "offline"); });
+  document.addEventListener("visibilitychange", function () { if (prof.on) add("ev", "visible", document.hidden ? "hidden" : "visible"); });
+  var mos = [], clsLast = [];
+  function watchClasses() {   // which classes came and went on the page, the weather layer, the menus and each scene: the scene, the date colour, a menu opening
+    if (!W.MutationObserver) return;
+    var watch = function (el, name) {
+      if (!el || el.__tvm) return;
+      el.__tvm = 1;
+      var k = clsLast.length; clsLast.push(String(el.className || ""));
+      var mo = new W.MutationObserver(function () {
+        var o = clsLast[k].split(/\s+/), now = String(el.className || ""), n = now.split(/\s+/);
+        var plus = n.filter(function (c) { return c && o.indexOf(c) < 0; }), minus = o.filter(function (c) { return c && n.indexOf(c) < 0; });
+        clsLast[k] = now;
+        if (plus.length || minus.length) add("ev", "cls", name + (plus.length ? " +" + plus.join(" +") : "") + (minus.length ? " -" + minus.join(" -") : ""));
+      });
+      mo.observe(el, { attributes: true, attributeFilter: ["class"] });
+      mos.push(mo);
+    };
+    watch(document.documentElement, "html"); watch(document.getElementById("wx-layers"), "wx-layers"); watch(document.getElementById("settings"), "settings");
+    [].forEach.call(document.querySelectorAll(".scene"), function (el) { var m = /\bs-([a-z]+)/.exec(el.className); watch(el, "scene-" + (m ? m[1] : "?")); });
+  }
+  function unwatchClasses() { mos.forEach(function (m) { m.disconnect(); }); mos = []; clsLast = []; [].forEach.call(document.querySelectorAll("*"), function (el) { if (el.__tvm) el.__tvm = 0; }); }
+  function snap() {   // once a minute: what the screen looks like in numbers, to compare one minute with the next
+    if (!prof.on) return;
+    watchClasses();   // scenes or menus built since the last look
+    var s = {};
+    try {
+      var dl = document.querySelector("#date .date-label"), wx = document.querySelector("#date .wx"), de = document.getElementById("date"), g = document.querySelector(".scene.on .gclock .fill");
+      s.dateColor = dl && W.getComputedStyle(dl).color; s.weatherColor = wx && W.getComputedStyle(wx).color;
+      if (de) { var r = de.getBoundingClientRect(); s.date = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; }
+      if (g) { var q = g.getBoundingClientRect(); s.clock = [Math.round(q.left), Math.round(q.top), Math.round(q.width), Math.round(q.height)]; }
+      s.place = W.tv && W.tv.places && W.tv.places();
+      s.html = document.documentElement.className; s.hidden = document.hidden; s.nodes = document.getElementsByTagName("*").length;
+      if (performance.memory) s.heapMB = Math.round(performance.memory.usedJSHeapSize / 1048576);
+    } catch (e) { s.error = String(e); }
+    add("i", "snap", s);
+  }
 
   // ---- speed: frames a second, long frames, memory, and tasks that block the page (while connected) ----
   var perf = { frames: 0, long: 0, vlong: 0, worst: 0, last: 0, since: 0, raf: 0, on: false };
@@ -146,7 +243,7 @@
     perf.frames = perf.long = perf.vlong = perf.worst = 0; perf.since = Date.now();
     return r;
   }
-  var perfTimer = 0, po = null;
+  var perfTimer = 0, snapTimer = 0, snapFirst = 0, po = null;
   function observe() {
     if (po || !W.PerformanceObserver) return;
     try {
@@ -309,16 +406,17 @@
     if (running || !cfg.on || !parse()) return;
     running = true; gen++;
     add("i", "debug", "connected to the debug server");
-    observe(); perfStart();
+    observe(); perfStart(); watchClasses();
     var g = gen;
     flush(g); poll(g);
     perfTimer = setInterval(function () { var r = perfTake(); add("i", "perf", r); }, 10000);
+    snapTimer = setInterval(snap, 60000); snapFirst = setTimeout(snap, 4000);
   }
   function stop() {
     if (!running) return;
     running = false; gen++;
-    clearTimeout(timers.flush); clearTimeout(timers.poll); clearInterval(perfTimer);
-    perfStop(); unobserve(); prof.on = false;
+    clearTimeout(timers.flush); clearTimeout(timers.poll); clearInterval(perfTimer); clearInterval(snapTimer); clearTimeout(snapFirst);
+    perfStop(); unobserve(); unwatchClasses(); prof.on = false;
     conn.ok = false;
   }
 

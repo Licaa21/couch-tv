@@ -332,5 +332,23 @@ TV and switch it on. Nothing secret is sent (a setting whose name looks like a k
 
 **Which callback is slow (0.15.5).** If the debug connection is already on when the app starts, the app times every timer, key handler, animation frame and XHR callback (and its big functions by name). In `logs` a callback over 100 ms shows as `slow` with its source, a gap over 150 ms between frames as `stall` with everything that ran in it (a stall with nothing in it is the browser's own layout or paint), and a key that took over 120 ms to reach the next frame as `keylag`. Switch the connection on, then `tvdebug.py reload`, then read `logs --tag slow` and `--tag stall`.
 
+**What the log holds (0.15.6).** With the connection on at start, `logs --tag <tag>` (or `--grep`) shows:
+
+| Tag | What it says |
+|---|---|
+| `key`, `focus` | each key, then where the focus is 150 ms later (classes, words, box) |
+| `slow`, `stall`, `keylag`, `longtask`, `perf` | speed: callbacks over 100 ms, gaps between frames, keys that took long, frames a second |
+| `net` | every request: kind, method, address without its query, answer, time, size |
+| `setting`, `store` | a setting that changed (name and short value, secrets masked), other storage writes by size only |
+| `cls` | classes that came or went on the page, the weather layer, Home settings and each scene (scene, `date-dark`/`date-light`, menus) |
+| `tone`, `lift` | the date and clock going dark or light with the picture; the clock rising when the row would cover it |
+| `scene`, `pic`, `pic-fail`, `glide`, `commit`, `dissolve`, `preview`, `test-wx`, `weather`, `weather-fail` | the places, their pictures and fades, the weather asked for and shown |
+| `jellyfin`, `jellyfin-fail` | Continue watching refreshes: how many cards, or why not |
+| `tizen-log` | what the TV answered when an app was launched, Input or TV settings opened |
+| `idle-ambient`, `screen-off`, `home`, `visible`, `net-state` | the page's own states |
+| `load-fail` | a picture, script or style that did not load (the same one at most every 30 s) |
+| `snap` | once a minute: date and weather colours, the date and clock boxes, the place, memory, page classes |
+| `error`, `console`, `promise` | errors and what the app printed |
+
 The server also writes everything it hears to `tvdebug.log`. Only the computer itself can give commands (the command line talks to
 `127.0.0.1`); the TV's requests need the key. Switch the debug connection off in Testing when you are done.

@@ -1192,6 +1192,7 @@
     var sp = L.B && p >= 0.5 ? L.B : L.A, P = window.Places, i = P.WEATHERS.indexOf(sp.wx) * 6 + sp.k, root = document.documentElement;
     var dark = meta.charAt(i) === "1";
     root.style.setProperty("--tone-s", Math.max(0.01, secs || 0) + "s");
+    if (root.classList.contains("date-dark") !== dark) dbg("tone", { scene: s.id, dark: dark, secs: Math.round((secs || 0) * 10) / 10, p: Math.round((p || 0) * 100) / 100 });   // the date and clock go dark or light with the picture
     root.classList.toggle("date-dark", dark);
     root.classList.toggle("date-light", !dark);
   }
@@ -1570,9 +1571,10 @@
     var direct = OFFLINE || !!(ST.place && isFinite(ST.place.lat));
     return (direct ? weatherDirect() : api("GET", "/api/weather")).then(function (j) {
       data.weather = j;
+      dbg("weather", { code: j && j.code, temp: j && j.temp, day: j && j.is_day });
       clock();
       updateAmbientWeather();
-    }, function () {});
+    }, function (e) { dbg("weather-fail", String(e && e.message || e)); });
   }
 
   // Open-Meteo (free, no key), the same call the bridge makes. The words come from i18n.js.
@@ -2196,6 +2198,7 @@
   var screenOffActive = false;
   function toggleScreenOff(on) {
     var overlay = $("screen-off-overlay");
+    if (screenOffActive !== !!on) dbg("screen-off", !!on);
     screenOffActive = !!on;
     if (screenOffActive) {
       if (overlay) {
@@ -2246,6 +2249,7 @@
   }
   function setIdleAmbient(on) {
     var ov = $("idle-ambient-overlay");
+    if (idleAmbientActive !== !!on) dbg("idle-ambient", !!on);
     idleAmbientActive = !!on;
     if (idleAmbientActive) {
       clock();
@@ -2925,7 +2929,7 @@
       dy = Math.min(need, Math.max(0, room));   // never smaller: what still overlaps stays behind the cards, as the clock always is
     }
     var px = Math.round(dy) + "px", de = document.documentElement;   // written only when changed: a custom property on <html> restyles the whole page
-    if (el.style.getPropertyValue("--cdy") !== px) el.style.setProperty("--cdy", px);
+    if (el.style.getPropertyValue("--cdy") !== px) { dbg("lift", { scene: sceneEls.indexOf(el), px: px }); el.style.setProperty("--cdy", px); }   // the clock rises when the row would cover it
     if (el.classList.contains("on") && de.style.getPropertyValue("--cdy-r") !== px) de.style.setProperty("--cdy-r", px);   // the date line rises with it
   }
   // all the scenes again: the glass in the digits is cut from where the clock now is
@@ -3884,6 +3888,7 @@
   }
 
   function goHome() {
+    dbg("home", zone);
     if (screenOffActive) {
       toggleScreenOff(false);
       return;
