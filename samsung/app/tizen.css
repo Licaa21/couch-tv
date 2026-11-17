@@ -268,7 +268,9 @@ html.cp-open #cp-hint { opacity: 0; animation: none; }
 .srow.focus { transform: none; box-shadow: none; }
 
 /* Readable on a bright photo (golden hour, dawn): the row's heading, the titles and the notes get a dark halo of their own. */
-#shelf-title, .shelf-none, .jcap b, .jcap i, .app .label { text-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.75), 0 0.0625rem 0.25rem rgba(0, 0, 0, 0.85), 0 0.125rem 1.25rem rgba(0, 0, 0, 0.55); }
+/* Three layers, one of them 20 px wide, were drawn again under every label each time the focus moved (about 100 ms a key press on a 2021 TV, measured). Two small ones keep the
+   dark edge that reads on a bright picture. */
+#shelf-title, .shelf-none, .jcap b, .jcap i, .app .label { text-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.7), 0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.85); }
 #shelf-title, .shelf-none { font-weight: 650; color: #fff; }
 
 /* Home settings and the other menus just appear: no settling animation, no blur behind them. */
@@ -334,3 +336,7 @@ html.lighter .scene .gclock:not(.under) { filter: none !important; }
 .wx-fog.lv1 .wx-l.far { opacity: 0.6; }
 .wx-fog.lv2 .wx-l.far { opacity: 0.85; }
 .wx-fog.lv3 .wx-l.far { opacity: 1; }
+/* The lightning canvas covered the whole screen all the time (Lighter home shows it on this app), though it only draws during a storm: as a layer over the photo it made every
+   key press repaint the picture and the clock under it (measured on a 2021 TV: 10 key presses 1.5 s of frozen page, 0.2 s without it). ambient-weather.js puts wx-storm on the page
+   while a storm is on, and only then does it show. */
+html:not(.wx-storm) .weather-canvas, html.lighter:not(.wx-storm) .weather-canvas { display: none !important; }

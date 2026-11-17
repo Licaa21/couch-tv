@@ -200,6 +200,8 @@
   // Draws (or clears) the current weather: called when the weather, or a setting that gates it, changes.
   function applyType() {
     stopLightning();
+    // the page says when a storm is on: the lightning canvas is only a layer on the screen then (samsung/app/tizen.css hides it otherwise)
+    try { if (root.document) root.document.documentElement.classList.toggle("wx-storm", currentType === "storm" && !!enabled && !lighterMode); } catch (e) {}
     if (lightingEl) lightingEl.classList.remove("has-weather-tint", "wx-rain-tint", "wx-snow-tint", "wx-fog-tint", "wx-storm-tint");
     setLayers(null);
     if (!inited || currentType === "clear" || !enabled || lighterMode) return;
