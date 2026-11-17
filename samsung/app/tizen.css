@@ -310,3 +310,7 @@ html.lighter .scene .gclock:not(.under) { filter: none !important; }
    TV drew the filter again over the whole 1920 px wide clock in software: about 540 ms with the page frozen (measured on a 2021 Q67A). On a layer of its
    own the same change takes about 110 ms, and the clock looks the same. */
 .gclock .fill { will-change: transform; }
+/* Romanian (and any language that puts the weather under the date): the block is two lines tall but each scene's top was set for one, so the weather line
+   sat on the tops of the digits. Raised by the second line's height; a clock with its date below it (own scenes) stays where it was. */
+.theme-night .date.weather-lines { margin-top: -2.2rem; }
+.scene-mine.mine-below .date.weather-lines { margin-top: 0; }
