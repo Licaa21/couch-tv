@@ -197,11 +197,19 @@
     if (ctx) ctx.clearRect(0, 0, W, H);
   }
 
+  // The page says when lightning can show: a storm, on, not paused (Home settings open). Only then is the canvas a layer on the screen (samsung/app/tizen.css hides it
+  // otherwise: as a full-screen layer it made every key press repaint the picture under it). Written only when it changes: a class on <html> restyles the page.
+  var stormShown = false;
+  function syncStormClass() {
+    var on = currentType === "storm" && !!enabled && !lighterMode && !isPaused && !!inited;
+    if (on === stormShown) return;
+    stormShown = on;
+    try { if (root.document) root.document.documentElement.classList.toggle("wx-storm", on); } catch (e) {}
+  }
   // Draws (or clears) the current weather: called when the weather, or a setting that gates it, changes.
   function applyType() {
     stopLightning();
-    // the page says when a storm is on: the lightning canvas is only a layer on the screen then (samsung/app/tizen.css hides it otherwise)
-    try { if (root.document) root.document.documentElement.classList.toggle("wx-storm", currentType === "storm" && !!enabled && !lighterMode); } catch (e) {}
+    syncStormClass();
     if (lightingEl) lightingEl.classList.remove("has-weather-tint", "wx-rain-tint", "wx-snow-tint", "wx-fog-tint", "wx-storm-tint");
     setLayers(null);
     if (!inited || currentType === "clear" || !enabled || lighterMode) return;
@@ -318,11 +326,13 @@
     pause: function () {
       isPaused = true;
       stopLightning();
+      syncStormClass();
       if (layersEl) layersEl.classList.add("paused");
     },
 
     resume: function () {
       isPaused = false;
+      syncStormClass();
       if (layersEl) layersEl.classList.remove("paused");
       if (currentType === "storm" && enabled && !lighterMode) scheduleStrike(randomRange(3000, 8000));
     },

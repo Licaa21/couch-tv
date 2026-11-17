@@ -1297,6 +1297,23 @@
     });
     setTimeout(fin, 20000);   // the pictures come over the network: a fade that starts before its picture is there shows nothing and then jumps
   }
+  // The Samsung app: a layer is painted once, almost invisibly (opacity 0.003, under one step of 255), before its fade starts: the picture first, then the clock's glass (all its
+  // clocks together). The TV sends a 4K picture to its graphics memory on its first paint (about 200 ms of a frozen page, measured), and that used to fall into the first
+  // frames of the fade; now it falls on a screen that is not moving. PREWARM_GAP is that upload plus some margin. Other TVs go straight on.
+  var PREWARM_GAP = 320;
+  function prewarm(el, done) {
+    if (!window.MoonfinTV) return done();
+    var steps = [[lay(el).top], [].slice.call(el.querySelectorAll(".fillb"))], i = 0;
+    (function step() {
+      var group = steps[i++];
+      if (!group) return done();
+      group = group.filter(function (e) { return e && e.parentNode; });
+      if (!group.length) return step();
+      group.forEach(function (e) { e.style.transition = "none"; e.style.display = "block"; e.style.opacity = "0.003"; });
+      dbg("prewarm", { layer: String(group[0].className).split(/\s+/)[0] || group[0].tagName, n: group.length });
+      setTimeout(step, PREWARM_GAP);   // a timer, not a frame: it still runs when the page is hidden
+    })();
+  }
   function placeRedraw(s, el) { if (glassShown) drawClocks(el, s, glassShown); }
 
   // The layers hold the wanted pictures at once (the first draw, or the place has just been shown)
@@ -1328,7 +1345,15 @@
       var b2 = lay(el).top, fg2 = el.querySelector(".fg2");
       setPic(b2, placeUrl(placeKey(s, L.B), ".jpg")); if (fg2) fg2.src = placeUrl(placeKey(s, L.B), "-fg.webp");
       s.curB = placeKey(s, L.B); placeBlend(el, 0, 0); placeRedraw(s, el);
-      whenDecoded([b2].concat(glassImg(s, placeKey(s, L.B))), function () { if (s.L !== L) return; L.busy = false; if (DAY_PREV) { L.pB = 0; return placeUpdate(i); } L.pB = T.pair.p; placeBlend(el, L.pB, 4); });
+      whenDecoded([b2].concat(glassImg(s, placeKey(s, L.B))), function () {
+        if (s.L !== L) return;
+        prewarm(el, function () {
+          if (s.L !== L) return;
+          L.busy = false;
+          if (DAY_PREV) { L.pB = 0; return placeUpdate(i); }
+          L.pB = T.pair.p; placeBlend(el, L.pB, 4);
+        });
+      });
       return;
     }
     placeDissolve(s, el, { wx: T.wx, k: T.pair.a });   // anything else (back from a long wait, a new setting): dissolve to the wanted picture
@@ -1364,8 +1389,11 @@
       s.curB = key; placeRedraw(s, el);
       whenDecoded([b2].concat(glassImg(s, key)), function () {
         if (s.L !== L) return;
-        placeBlend(el, 1, secs);
-        setTimeout(function () { if (s.L !== L) return; L.busy = false; placeCommit(s, el, L, function () { placeUpdate(sceneEls.indexOf(el)); }); }, secs * 1000 + 300);
+        prewarm(el, function () {
+          if (s.L !== L) return;
+          placeBlend(el, 1, secs);
+          setTimeout(function () { if (s.L !== L) return; L.busy = false; placeCommit(s, el, L, function () { placeUpdate(sceneEls.indexOf(el)); }); }, secs * 1000 + 300);
+        });
       });
     };
     if (L.B && L.pB > 0.02 && !quick) {   // fold the half way drift into one picture first
