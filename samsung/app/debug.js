@@ -80,38 +80,37 @@
       var t0 = performance.now(), a0 = arguments[0], label = "";
       if (kind === "ev" && a0 && a0.type) label = a0.type + (a0.keyCode ? "#" + a0.keyCode : "");
       try { return fn.apply(this, arguments); }
-      finally { var d = performance.now() - t0; if (d >= 8) took(kind, d, fn, label); }
+      finally { var d = performance.now() - t0; if (d >= 8) try { took(kind, d, fn, label); } catch (eT) {} }
     };
-    try { fn.__tvw = w; } catch (e) {}
+    try { fn.__tvw = w; } catch (e) { return fn; }   // a function that cannot carry the cache would never match removeEventListener: leave it alone
     return w;
   }
   W.TVPROF = function (name, fn) {   // the app wraps its own big functions with this, to see them by name
-    if (typeof fn !== "function") return fn;
+    if (typeof fn !== "function" || !cfg.on) return fn;   // connection off at load: the app keeps its own functions
     return function () {
       if (!prof.on) return fn.apply(this, arguments);
       var t0 = performance.now();
       try { return fn.apply(this, arguments); }
-      finally { var d = performance.now() - t0; if (d >= 8) took("fn", d, fn, name); }
+      finally { var d = performance.now() - t0; if (d >= 8) try { took("fn", d, fn, name); } catch (eT) {} }
     };
   };
   if (cfg.on) try {   // only when the connection was already on at load: a page with it off keeps its own timers untouched (switch it on, then reload)
-    var st0 = W.setTimeout, si0 = W.setInterval;
+    var ET = W.EventTarget.prototype, ael = ET.addEventListener, rel = ET.removeEventListener, st0 = W.setTimeout, si0 = W.setInterval, XP = W.XMLHttpRequest.prototype;
     W.setTimeout = function (f) { var a = Array.prototype.slice.call(arguments); a[0] = wrapFn(f, "timeout"); return st0.apply(W, a); };
     W.setInterval = function (f) { var a = Array.prototype.slice.call(arguments); a[0] = wrapFn(f, "interval"); return si0.apply(W, a); };
     W.requestAnimationFrame = function (f) { return rafOrig.call(W, wrapFn(f, "raf")); };
-    var ET = W.EventTarget && W.EventTarget.prototype, ael = ET.addEventListener, rel = ET.removeEventListener;
     ET.addEventListener = function (type, f, o) { return ael.call(this, type, wrapFn(f, "ev"), o); };
     ET.removeEventListener = function (type, f, o) { return rel.call(this, type, f && f.__tvw || f, o); };
     ["onload", "onerror", "ontimeout", "onreadystatechange", "onloadend"].forEach(function (n) {
-      var d = Object.getOwnPropertyDescriptor(W.XMLHttpRequest.prototype, n) || Object.getOwnPropertyDescriptor(W.XMLHttpRequestEventTarget.prototype, n);
+      var d = Object.getOwnPropertyDescriptor(XP, n) || Object.getOwnPropertyDescriptor(W.XMLHttpRequestEventTarget.prototype, n);
       if (!d || !d.set) return;
-      Object.defineProperty(W.XMLHttpRequest.prototype, n, { configurable: true, enumerable: true,
+      Object.defineProperty(XP, n, { configurable: true, enumerable: true,
         get: function () { var v = d.get.call(this); return v && v.__tvo || v; },
         set: function (v) { var w = wrapFn(v, "xhr"); if (w !== v && w) w.__tvo = v; d.set.call(this, w); } });
     });
   } catch (eP) { add("e", "profiler", "could not wrap the timers: " + eP); }
   // keys: when one was pressed, so the first frame after it can say how long the screen took to answer
-  W.addEventListener("keydown", function (e) { if (prof.on) { prof.keyAt = performance.now(); prof.keyCode = e.keyCode; add("ev", "key", e.keyCode); } }, true);
+  W.addEventListener("keydown", function (e) { if (prof.on && perf.on) { prof.keyAt = performance.now(); prof.keyCode = e.keyCode; add("ev", "key", e.keyCode); } }, true);
 
   // ---- speed: frames a second, long frames, memory, and tasks that block the page (while connected) ----
   var perf = { frames: 0, long: 0, vlong: 0, worst: 0, last: 0, since: 0, raf: 0, on: false };
@@ -132,6 +131,7 @@
     perf.last = ts;
     perf.raf = rafOrig.call(W, frame);
   }
+  document.addEventListener("visibilitychange", function () { perf.last = 0; prof.keyAt = 0; });   // screen off or another app in front: the gap is not a stall
   function perfStart() {
     if (perf.on) return;
     perf.on = true; prof.on = true; perf.frames = perf.long = perf.vlong = perf.worst = 0; perf.last = 0; perf.since = Date.now();
