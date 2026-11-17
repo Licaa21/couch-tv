@@ -316,3 +316,21 @@ html.lighter .scene .gclock:not(.under) { filter: none !important; }
    sat on the tops of the digits. Raised by the second line's height; a clock with its date below it (own scenes) stays where it was. */
 .theme-night .date.weather-lines { margin-top: -2.2rem; }
 .scene-mine.mine-below .date.weather-lines { margin-top: 0; }
+/* The scene with the clock on the left (fog): the date used to be pushed right of the profile switch (app.js fitDate), so it hung beside the clock instead of
+   over it. It now stands over the clock's own width, centred on the digits, which is clear of the switch. */
+.scene-fog .date { left: 6rem; right: auto; width: 52.9rem; text-align: center; }
+/* Fog (Home, the weather): the patchy cloud picture drifting over everything looked like smoke blobs with hard edges and sat on the clock. A soft haze rises
+   from the ground instead (the clock above it stays clear), and it drifts a few percent sideways and back, slowly (a transform: the TV's chip does it). */
+.wx-fog .wx-l.far {
+  left: -4%; width: 108%; top: 0; height: 100%; background-size: 100% 100%; background-repeat: no-repeat;
+  background-image:
+    radial-gradient(70% 38% at 22% 100%, rgba(214, 222, 232, 0.34), rgba(214, 222, 232, 0) 100%),
+    radial-gradient(65% 34% at 78% 98%, rgba(214, 222, 232, 0.30), rgba(214, 222, 232, 0) 100%),
+    radial-gradient(60% 24% at 50% 74%, rgba(214, 222, 232, 0.16), rgba(214, 222, 232, 0) 100%),
+    linear-gradient(to top, rgba(214, 222, 232, 0.22), rgba(214, 222, 232, 0.07) 38%, rgba(214, 222, 232, 0) 62%);
+  animation-name: wx-mist; animation-duration: 70s; animation-direction: alternate; animation-timing-function: ease-in-out;
+}
+@keyframes wx-mist { from { transform: translate3d(-2.5%, 0, 0); } to { transform: translate3d(2.5%, 0, 0); } }
+.wx-fog.lv1 .wx-l.far { opacity: 0.6; }
+.wx-fog.lv2 .wx-l.far { opacity: 0.85; }
+.wx-fog.lv3 .wx-l.far { opacity: 1; }
