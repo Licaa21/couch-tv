@@ -341,3 +341,7 @@ html.lighter .scene .gclock:not(.under) { filter: none !important; }
    key press repaint the picture and the clock under it (measured on a 2021 TV: 10 key presses 1.5 s of frozen page, 0.2 s without it). ambient-weather.js puts wx-storm on the page
    while a storm is on, and only then does it show. */
 html:not(.wx-storm) .weather-canvas, html.lighter:not(.wx-storm) .weather-canvas { display: none !important; }
+/* The lake: no blurred reflection of the clock under the waterline (it did not look good, and its blur and filters cost the TV about 30 frames a second: 20 fps with it, 49 without).
+   The clock is whole, without the cut at the waterline that the reflection needed. */
+.s-water .gclock.under { display: none !important; }
+.s-water .gclock:not(.under) { clip-path: none !important; }

@@ -670,7 +670,7 @@
     var day = d.toLocaleDateString(loc, { weekday: "long" }) + ", " + d.toLocaleDateString(loc, { day: "numeric", month: "long" });
     day = day.charAt(0).toUpperCase() + day.slice(1);   // "lunes 27 de octubre" starts a line on screen
     var wn = wxNow(), w = NIGHT && WX_SHOW && wn && wn.temp != null ? wn : null;
-    var place = w ? weatherPlace() : "";
+    var place = w || (NIGHT && WX_SHOW) ? weatherPlace() : "";   // the city shows even before the weather has come (or while a test weather has no temperature): it is a setting, not a reading
     var date = $("date");
     if (lang === "ro" && (place || w)) {   // Romanian: the date on one line, the place, temperature and weather under it (upstream)
       var weatherParts = [place, w && tempText(w.temp), w && wxText(w)].filter(Boolean);
@@ -681,7 +681,7 @@
       date.classList.remove("weather-lines");
       date.innerHTML = '<span class="dline">' + esc(day) + (w ? '<span class="wx">' +
         (place ? '<span class="wx-place">' + esc(place) + " · </span>" : "") + wxIcon(w) + esc(tempText(w.temp)) +
-        '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : "") + "</span>";
+        '<span class="ww"> ' + esc(wxText(w)) + "</span></span>" : place ? '<span class="wx"><span class="wx-place">' + esc(place) + "</span></span>" : "") + "</span>";
     }
     var ic = $("idle-clock"), idate = $("idle-date"), iwx = $("idle-wx");
     if (ic) ic.innerHTML = hm + (CLOCK24 ? "" : "<small>" + esc(h < 12 ? t("am") : t("pm")) + "</small>");
