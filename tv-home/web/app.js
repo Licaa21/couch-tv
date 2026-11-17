@@ -1596,6 +1596,9 @@
 
   // The bridge's reading for the place in config.json, or straight from Open-Meteo with no bridge
   // or when Home settings chose another place. Hidden when Home settings switched the weather off.
+  // A weather request that fails (the TV's network is not up yet, or the service is out of reach for a while) is tried again after 1 minute, then 2, then every 5 minutes,
+  // until one works: the regular look is only every WX_EVERY minutes (30 by default), and until then the weather and the picture that follows it stay unknown.
+  var wxRetryS = 0, wxRetryT = null;
   function refreshWeather() {
     if (!NIGHT || !WX_SHOW) {
       updateAmbientWeather();
@@ -1603,11 +1606,16 @@
     }
     var direct = OFFLINE || !!(ST.place && isFinite(ST.place.lat));
     return (direct ? weatherDirect() : api("GET", "/api/weather")).then(function (j) {
+      wxRetryS = 0; clearTimeout(wxRetryT);
       data.weather = j;
       dbg("weather", { code: j && j.code, temp: j && j.temp, day: j && j.is_day });
       clock();
       updateAmbientWeather();
-    }, function (e) { dbg("weather-fail", String(e && e.message || e)); });
+    }, function (e) {
+      wxRetryS = wxRetryS ? Math.min(wxRetryS * 2, 300) : 60;
+      clearTimeout(wxRetryT); wxRetryT = setTimeout(refreshWeather, wxRetryS * 1000);
+      dbg("weather-fail", { error: String(e && e.message || e), retryInS: wxRetryS });
+    });
   }
 
   // Open-Meteo (free, no key), the same call the bridge makes. The words come from i18n.js.
